@@ -14,9 +14,19 @@ for (const [slider, label] of [
   ["n-agents", "n-agents-value"],
   ["bias", "bias-value"],
   ["rounds", "rounds-value"],
-  ["event-impact", "event-impact-value"],
 ]) {
   $(slider).addEventListener("input", () => ($(label).textContent = $(slider).value));
+}
+
+/* ---- status helpers ---- */
+function setStatus(mode, text) {
+  const pill = $("status-pill");
+  pill.className = `pill pill-${mode}`;
+  pill.textContent = text;
+}
+
+function setProgress(round, total) {
+  $("progress-bar").style.width = total ? `${(100 * round) / total}%` : "0%";
 }
 
 /* ---- API helpers ---- */
@@ -84,7 +94,10 @@ async function runSimulation() {
   $("run-btn").disabled = true;
   $("inject-btn").disabled = false;
   $("feed").innerHTML = "";
+  $("composer-note").textContent = "";
   state.totalRounds = Number($("rounds").value);
+  setProgress(0, state.totalRounds);
+  setStatus("running", "Starting…");
 
   try {
     const wantLlm = $("use-llm").checked;
@@ -95,24 +108,27 @@ async function runSimulation() {
       use_llm: wantLlm,
     });
     state.simId = sim.id;
-    if (wantLlm && !sim.llm_active) {
-      $("feed-status").textContent = "— LLM unavailable, using templates";
-    }
+    $("composer-note").textContent =
+      wantLlm && !sim.llm_active
+        ? "LLM unavailable on the server — falling back to template posts."
+        : "";
     renderMetrics(sim.metrics, 0);
     onSimCreated(sim);
 
     for (let round = 1; round <= state.totalRounds; round++) {
-      $("feed-status").textContent = `— round ${round}/${state.totalRounds}`;
+      setStatus("running", `Running — round ${round}/${state.totalRounds}`);
+      setProgress(round, state.totalRounds);
       const step = await api(`/simulations/${state.simId}/step`, "POST");
       renderPosts(step.posts);
       renderMetrics(step.metrics, step.round);
       onStep(step);
       await sleep(650);
     }
-    $("feed-status").textContent = "— finished";
+    setStatus("done", "Finished");
     await onFinished();
   } catch (err) {
-    $("feed-status").textContent = `— error: ${err.message}`;
+    setStatus("idle", "Error");
+    $("composer-note").textContent = `Something went wrong: ${err.message}`;
   } finally {
     state.running = false;
     $("run-btn").disabled = false;

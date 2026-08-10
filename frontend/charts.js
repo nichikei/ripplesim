@@ -15,13 +15,16 @@ const COLORS = {
 let history = [];   // metrics per round
 let eventRounds = [];
 let agents = [];
+let mapLayout = null; // {cols, cell} of the population grid, for hover hit-testing
+
+const TRAJ_PAD = { l: 30, r: 8, t: 8, b: 18 };
 
 /* ---------- opinion trajectory (2 series, one -1..1 axis) ---------- */
 function drawTrajectory() {
   const canvas = document.getElementById("chart-trajectory");
   const ctx = canvas.getContext("2d");
   const W = canvas.width, H = canvas.height;
-  const pad = { l: 30, r: 8, t: 8, b: 18 };
+  const pad = TRAJ_PAD;
   ctx.clearRect(0, 0, W, H);
 
   const x = (i) =>
@@ -114,6 +117,7 @@ function drawAgentGrid() {
   const rows = Math.ceil(agents.length / cols);
   const cell = Math.min(canvas.width / cols, canvas.height / rows);
   const size = Math.max(2, cell - 2); // 2px surface gap between fills
+  mapLayout = { cols, cell };
 
   agents.forEach((agent, i) => {
     const cx = (i % cols) * cell;
@@ -143,6 +147,51 @@ async function renderReport() {
     <h3>Most viral post</h3>
     <div class="summary">${report.top_posts[0] ? `“${esc(report.top_posts[0].text)}” — ${esc(report.top_posts[0].handle)}, ❤️ ${report.top_posts[0].likes}` : "–"}</div>`;
 }
+
+/* ---------- hover tooltips ---------- */
+function setupTooltips() {
+  const traj = document.getElementById("chart-trajectory");
+  const trajTip = document.getElementById("chart-tooltip");
+  traj.addEventListener("mousemove", (e) => {
+    if (history.length < 2) return;
+    const rect = traj.getBoundingClientRect();
+    const x = ((e.clientX - rect.left) * traj.width) / rect.width;
+    const t = (x - TRAJ_PAD.l) / (traj.width - TRAJ_PAD.l - TRAJ_PAD.r);
+    const i = Math.round(t * (history.length - 1));
+    if (i < 0 || i >= history.length) return trajTip.classList.add("hidden");
+    const m = history[i];
+    const evt = eventRounds.includes(m.round) ? " · ⚡ event" : "";
+    trajTip.innerHTML =
+      `<b>Round ${m.round}</b>${evt}<br>` +
+      `mean ${m.mean_opinion >= 0 ? "+" : ""}${m.mean_opinion.toFixed(2)} · ` +
+      `polarization ${m.polarization.toFixed(2)}`;
+    trajTip.style.left = `${e.clientX - rect.left}px`;
+    trajTip.style.top = `${e.clientY - rect.top}px`;
+    trajTip.classList.remove("hidden");
+  });
+  traj.addEventListener("mouseleave", () => trajTip.classList.add("hidden"));
+
+  const map = document.getElementById("agent-grid");
+  const mapTip = document.getElementById("map-tooltip");
+  map.addEventListener("mousemove", (e) => {
+    if (!mapLayout || !agents.length) return;
+    const rect = map.getBoundingClientRect();
+    const x = ((e.clientX - rect.left) * map.width) / rect.width;
+    const y = ((e.clientY - rect.top) * map.height) / rect.height;
+    const idx = Math.floor(y / mapLayout.cell) * mapLayout.cols + Math.floor(x / mapLayout.cell);
+    const agent = agents[idx];
+    if (!agent) return mapTip.classList.add("hidden");
+    mapTip.innerHTML =
+      `${agent.avatar} <b>${agent.name}</b> ${agent.handle}<br>` +
+      `${agent.archetype} · stance ${agent.opinion >= 0 ? "+" : ""}${agent.opinion.toFixed(2)} · ` +
+      `${agent.followers} followers`;
+    mapTip.style.left = `${e.clientX - rect.left}px`;
+    mapTip.style.top = `${e.clientY - rect.top}px`;
+    mapTip.classList.remove("hidden");
+  });
+  map.addEventListener("mouseleave", () => mapTip.classList.add("hidden"));
+}
+setupTooltips();
 
 /* ---------- wire into app.js hooks ---------- */
 onSimCreated = (sim) => {

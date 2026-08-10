@@ -7,66 +7,94 @@
   <link rel="stylesheet" href="style.css" />
 </head>
 <body>
-  <header>
-    <h1>🌊 RippleSim</h1>
-    <p>Drop a piece of news into a virtual society — watch opinion ripple.</p>
-  </header>
 
-  <main>
-    <aside class="sidebar">
-      <section class="card" id="setup-card">
-        <h2>Seed event</h2>
-        <label for="topic">Topic / headline</label>
-        <input id="topic" type="text" maxlength="200"
-               value="City announces free public transport for students" />
+  <nav class="topbar">
+    <div class="brand">
+      <span class="brand-mark">🌊</span>
+      <span class="brand-name">RippleSim</span>
+    </div>
+    <div class="topbar-right">
+      <span id="status-pill" class="pill pill-idle">Idle</span>
+      <a class="topbar-link" href="/docs" target="_blank" rel="noopener">API docs ↗</a>
+    </div>
+  </nav>
 
-        <label for="n-agents">Agents: <span id="n-agents-value">120</span></label>
-        <input id="n-agents" type="range" min="20" max="500" step="10" value="120" />
+  <section class="hero">
+    <h1>See how opinion <em>ripples</em> through a society</h1>
+    <p class="hero-sub">
+      Drop a piece of news into a virtual population of agents with real personalities —
+      then watch them argue, persuade each other, and switch sides in real time.
+    </p>
 
-        <label for="bias">Event favourability: <span id="bias-value">0.0</span></label>
-        <input id="bias" type="range" min="-1" max="1" step="0.1" value="0" />
+    <div class="composer">
+      <input id="topic" type="text" maxlength="200" class="composer-input"
+             placeholder='Describe a seed event — e.g. "City announces free public transport for students"'
+             value="City announces free public transport for students" />
 
-        <label for="rounds">Rounds: <span id="rounds-value">12</span></label>
-        <input id="rounds" type="range" min="3" max="40" step="1" value="12" />
+      <div class="composer-controls">
+        <div class="param">
+          <label for="n-agents">Agents <b id="n-agents-value">120</b></label>
+          <input id="n-agents" type="range" min="20" max="500" step="10" value="120" />
+        </div>
+        <div class="param">
+          <label for="bias">Favourability <b id="bias-value">0.0</b></label>
+          <input id="bias" type="range" min="-1" max="1" step="0.1" value="0" />
+        </div>
+        <div class="param">
+          <label for="rounds">Rounds <b id="rounds-value">12</b></label>
+          <input id="rounds" type="range" min="3" max="40" step="1" value="12" />
+        </div>
 
-        <label class="checkbox-row">
+        <label class="switch" title="Agents write their own posts with an LLM (needs ANTHROPIC_API_KEY on the server)">
           <input type="checkbox" id="use-llm" />
-          🧠 AI-written posts <span class="hint">(needs ANTHROPIC_API_KEY on the server)</span>
+          <span class="switch-track"><span class="switch-thumb"></span></span>
+          <span class="switch-label">AI posts</span>
         </label>
 
-        <button id="run-btn">▶ Run simulation</button>
-      </section>
+        <button id="run-btn" class="btn btn-primary">
+          <svg width="12" height="12" viewBox="0 0 12 12" fill="currentColor" aria-hidden="true"><path d="M2 1.5v9l8-4.5z"/></svg>
+          Run simulation
+        </button>
+      </div>
 
-      <section class="card" id="event-card">
-        <h2>God mode — inject event</h2>
-        <label for="event-headline">Breaking news</label>
-        <input id="event-headline" type="text" maxlength="200"
-               placeholder="Mayor admits budget shortfall…" />
-        <label for="event-impact">Impact: <span id="event-impact-value">-0.5</span></label>
-        <input id="event-impact" type="range" min="-1" max="1" step="0.1" value="-0.5" />
-        <button id="inject-btn" disabled>⚡ Inject</button>
-      </section>
+      <div class="progress"><div id="progress-bar"></div></div>
+      <div id="composer-note" class="composer-note"></div>
+    </div>
+  </section>
 
-      <section class="card" id="stats-card">
-        <h2>Live metrics</h2>
-        <div class="tiles">
-          <div class="tile"><span class="tile-label">Round</span><span class="tile-value" id="stat-round">–</span></div>
-          <div class="tile"><span class="tile-label">Mean stance</span><span class="tile-value" id="stat-mean">–</span></div>
-          <div class="tile"><span class="tile-label">Support</span><span class="tile-value" id="stat-support">–</span></div>
-          <div class="tile"><span class="tile-label">Oppose</span><span class="tile-value" id="stat-oppose">–</span></div>
-        </div>
-      </section>
-    </aside>
-
+  <main>
     <section class="feed-column">
-      <h2>Live feed <span id="feed-status"></span></h2>
+      <div class="feed-toolbar">
+        <span class="section-title">Live feed</span>
+        <div class="inject-group">
+          <input id="event-headline" type="text" maxlength="200"
+                 placeholder="Inject breaking news mid-run…" />
+          <select id="event-impact" aria-label="Event impact">
+            <option value="0.9">Very positive</option>
+            <option value="0.5">Positive</option>
+            <option value="-0.5" selected>Negative</option>
+            <option value="-0.9">Very negative</option>
+          </select>
+          <button id="inject-btn" class="btn btn-dark" disabled>⚡ Inject</button>
+        </div>
+      </div>
       <div id="feed"></div>
     </section>
 
-    <section class="viz-column">
-      <div class="card">
+    <aside class="analytics">
+      <div class="kpis">
+        <div class="tile"><span class="tile-label">Round</span><span class="tile-value" id="stat-round">–</span></div>
+        <div class="tile"><span class="tile-label">Mean stance</span><span class="tile-value" id="stat-mean">–</span></div>
+        <div class="tile"><span class="tile-label">Support</span><span class="tile-value" id="stat-support">–</span></div>
+        <div class="tile"><span class="tile-label">Oppose</span><span class="tile-value" id="stat-oppose">–</span></div>
+      </div>
+
+      <div class="card chart-card">
         <h2>Opinion trajectory</h2>
-        <canvas id="chart-trajectory" width="360" height="180"></canvas>
+        <div class="chart-wrap">
+          <canvas id="chart-trajectory" width="420" height="200"></canvas>
+          <div id="chart-tooltip" class="tooltip hidden"></div>
+        </div>
         <div class="legend">
           <span><i class="dot" style="background:var(--series-1)"></i> mean stance</span>
           <span><i class="dot" style="background:var(--series-2)"></i> polarization</span>
@@ -79,9 +107,12 @@
         <div id="dist-labels" class="legend"></div>
       </div>
 
-      <div class="card">
+      <div class="card chart-card">
         <h2>Population map</h2>
-        <canvas id="agent-grid" width="360" height="160"></canvas>
+        <div class="chart-wrap">
+          <canvas id="agent-grid" width="420" height="170"></canvas>
+          <div id="map-tooltip" class="tooltip hidden"></div>
+        </div>
         <div class="legend">
           <span><i class="dot" style="background:var(--support)"></i> support</span>
           <span><i class="dot" style="background:var(--neutral-mid)"></i> neutral</span>
@@ -93,8 +124,13 @@
         <h2>Prediction report</h2>
         <div id="report"></div>
       </div>
-    </section>
+    </aside>
   </main>
+
+  <footer>
+    <span>RippleSim — a multi-agent social opinion simulation engine.</span>
+    <span>FastAPI · vanilla JS · hand-rolled canvas charts</span>
+  </footer>
 
   <script src="app.js"></script>
   <script src="charts.js"></script>
