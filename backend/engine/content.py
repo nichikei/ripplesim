@@ -46,6 +46,34 @@ TEMPLATES: dict[str, list[str]] = {
     ],
 }
 
+REPLY_AGREE = [
+    "{handle} Exactly this. Couldn't have said it better.",
+    "{handle} 100%. More people need to see this take on {topic}.",
+    "{handle} This. All of this. 👏",
+    "{handle} Finally someone says it out loud.",
+]
+
+REPLY_DISAGREE = [
+    "{handle} Respectfully, that's not how {topic} works at all.",
+    "{handle} Wild take. Did you actually read anything about {topic}?",
+    "{handle} Hard disagree. The facts on {topic} say otherwise.",
+    "{handle} You're missing the whole point of {topic}, honestly.",
+]
+
+CONVERSION = {
+    "to_support": [
+        "Okay, I've been reading the threads on {topic}... I was wrong. I'm coming around.",
+        "Didn't expect to say this, but the arguments for {topic} are winning me over.",
+        "Update: after seeing what people are saying, I'm warming up to {topic}.",
+    ],
+    "to_oppose": [
+        "I defended {topic} at first. After what I've seen today, I can't anymore.",
+        "Changed my mind on {topic}. The critics are making too much sense.",
+        "Update: the more I read about {topic}, the worse it looks. I'm out.",
+    ],
+}
+
+
 # Optional pluggable LLM writer: (persona, topic, stance) -> post text
 LlmWriter = Callable[[Persona, str, str], Optional[str]]
 _llm_writer: Optional[LlmWriter] = None
@@ -64,6 +92,18 @@ def write_post(persona: Persona, topic: str, rng: random.Random) -> str:
         if text:
             return text
     return rng.choice(TEMPLATES[stance]).format(topic=topic)
+
+
+def write_reply(topic: str, target_handle: str, agree: bool, rng: random.Random) -> str:
+    """A short reply to another agent's post."""
+    pool = REPLY_AGREE if agree else REPLY_DISAGREE
+    return rng.choice(pool).format(handle=target_handle, topic=topic)
+
+
+def write_conversion(topic: str, now_supports: bool, rng: random.Random) -> str:
+    """Posted when an agent flips sides — makes the inner opinion shift visible."""
+    key = "to_support" if now_supports else "to_oppose"
+    return rng.choice(CONVERSION[key]).format(topic=topic)
 
 
 def virality_score(persona: Persona, rng: random.Random) -> float:

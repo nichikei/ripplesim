@@ -33,6 +33,8 @@ class Post:
     likes: int = 0
     shares: int = 0
     is_event: bool = False
+    is_conversion: bool = False  # agent announcing it switched sides
+    reply_to: str | None = None  # handle of the post being replied to
 
     def to_dict(self, author: Persona) -> dict:
         return {
@@ -47,6 +49,7 @@ class Post:
             "likes": self.likes,
             "shares": self.shares,
             "is_event": self.is_event,
+            "reply_to": self.reply_to,
         }
 
 
@@ -68,6 +71,8 @@ class Simulation:
         self.rng = random.Random(self.seed)
         self.population = generate_population(self.n_agents, self.rng, self.bias)
         self.graph = network.build_scale_free_graph(self.n_agents, m=3, rng=self.rng)
+        # Last side (support/oppose) each agent publicly held — for conversion posts.
+        self._announced_side = {p.id: self._side(p) for p in self.population}
         # Round 0 snapshot = initial state, before anyone speaks.
         self.metrics_history.append(self._record_metrics())
 
@@ -93,6 +98,7 @@ class Simulation:
 
             hops = 2 if post.virality > 0.75 else 1
             audience = network.neighbors_within(self.graph, author.id, hops)
+            replies_left = 2  # cap replies per post so threads don't explode
             for reader_id in audience:
                 reader = self.population[reader_id]
                 # Hub authors carry more weight; viral posts hit harder.
@@ -103,13 +109,58 @@ class Simulation:
                     post.likes += 1
                 if agree and self.rng.random() < post.virality * 0.15:
                     post.shares += 1
+                # Strong reactions spark replies — agents talk *to* each other.
+                strongly_disagrees = abs(reader.opinion - post.opinion) > 1.0
+                wants_to_reply = self.rng.random() < 0.1 * reader.expressiveness * (0.5 + post.virality)
+                if replies_left > 0 and (agree or strongly_disagrees) and wants_to_reply:
+                    reply = Post(
+                        id=len(self.posts) + len(new_posts) + 1,
+                        round=self.round,
+                        author_id=reader.id,
+                        text=content.write_reply(self.topic, author.handle, agree, self.rng),
+                        opinion=reader.opinion,
+                        virality=post.virality * 0.5,
+                        reply_to=author.handle,
+                    )
+                    reader.posts_made += 1
+                    author.engagement += 2  # being replied to is engagement too
+                    new_posts.append(reply)
+                    replies_left -= 1
             author.engagement += post.likes + post.shares * 3
             new_posts.append(post)
 
+        # Agents who drifted to the opposite side since they last showed one
+        # may publicly announce the change of heart.
+        for agent in self.population:
+            now = self._side(agent)
+            last = self._announced_side[agent.id]
+            if now != 0 and last != 0 and now != last and self.rng.random() < 0.6:
+                new_posts.append(Post(
+                    id=0,
+                    round=self.round,
+                    author_id=agent.id,
+                    text=content.write_conversion(self.topic, now > 0, self.rng),
+                    opinion=agent.opinion,
+                    virality=0.6,
+                    is_conversion=True,
+                ))
+                agent.posts_made += 1
+            if now != 0:
+                self._announced_side[agent.id] = now
+
+        # Renumber: replies were created before their round-mates were appended.
+        for offset, p in enumerate(new_posts):
+            p.id = len(self.posts) + offset
         self.posts.extend(new_posts)
         self.metrics_history.append(self._record_metrics())
 
-        shown = sorted(new_posts, key=lambda p: p.likes + p.shares * 3, reverse=True)
+        # Feed selection: conversions and replies are the interesting social
+        # signal, so they always make the cut ahead of ordinary posts.
+        conversions = [p for p in new_posts if p.is_conversion]
+        replies = [p for p in new_posts if p.reply_to is not None]
+        ordinary = [p for p in new_posts if not p.is_conversion and p.reply_to is None]
+        ordinary.sort(key=lambda p: p.likes + p.shares * 3, reverse=True)
+        shown = conversions[:2] + replies[:3] + ordinary
         return [p.to_dict(self.population[p.author_id]) for p in shown]
 
     # ----------------------------------------------------------- god mode
@@ -143,6 +194,11 @@ class Simulation:
         return record
 
     # ------------------------------------------------------------- helpers
+
+    @staticmethod
+    def _side(agent: Persona) -> int:
+        """-1 (oppose), 0 (neutral) or +1 (support)."""
+        return 1 if agent.opinion >= 0.15 else -1 if agent.opinion <= -0.15 else 0
 
     def _record_metrics(self) -> dict:
         snap = opinion.snapshot_metrics(self.population)
