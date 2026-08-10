@@ -247,14 +247,20 @@ class ReportAgent:
             + "\n\nInvestigate with the tools, then write the report."
         )
 
+        from backend.llm import supports_effort
+
+        kwargs: dict = {}
+        if supports_effort(self.model):
+            kwargs["output_config"] = {"effort": "medium"}
+
         try:
             runner = self.client.beta.messages.tool_runner(
                 model=self.model,
-                max_tokens=8000,
-                output_config={"effort": "medium"},
+                max_tokens=12000,  # room for thinking plus a multi-section report
                 system=SYSTEM,
                 tools=self._build_tools(sim, report),
                 messages=[{"role": "user", "content": brief}],
+                **kwargs,
             )
             last = None
             for iteration, message in enumerate(runner):

@@ -21,8 +21,21 @@ from typing import Optional
 from backend.engine.personas import Persona
 from backend.engine.simulation import Simulation
 
-DEFAULT_MODEL = "claude-opus-5"
+# Model per job, cheapest that does the job well. Posts are the high-volume
+# call (~10 per round) and the simplest task, so they run on Haiku; the
+# interview and the report agent need reasoning quality, so they run on Sonnet.
+POST_MODEL = "claude-haiku-4-5"
+CHAT_MODEL = "claude-sonnet-5"
+REPORT_MODEL = "claude-sonnet-5"
+
+# `output_config.effort` is not accepted by these models — sending it is a 400.
+MODELS_WITHOUT_EFFORT = ("claude-haiku-4-5", "claude-sonnet-4-5")
+
 MAX_LLM_POSTS_PER_ROUND = 10
+
+
+def supports_effort(model: str) -> bool:
+    return not model.startswith(MODELS_WITHOUT_EFFORT)
 
 ENV_FILE = Path(__file__).resolve().parent.parent / ".env"
 
@@ -58,7 +71,9 @@ class LlmService:
         import anthropic
 
         self.client = anthropic.Anthropic()
-        self.model = os.environ.get("RIPPLESIM_MODEL", DEFAULT_MODEL)
+        self.post_model = os.environ.get("RIPPLESIM_POST_MODEL", POST_MODEL)
+        self.chat_model = os.environ.get("RIPPLESIM_CHAT_MODEL", CHAT_MODEL)
+        self.report_model = os.environ.get("RIPPLESIM_REPORT_MODEL", REPORT_MODEL)
         # One worker per post so a round is a single wave of calls, not two —
         # round latency is one API call, not ceil(posts / workers) of them.
         self.pool = ThreadPoolExecutor(max_workers=MAX_LLM_POSTS_PER_ROUND)
@@ -76,15 +91,18 @@ class LlmService:
 
     # ------------------------------------------------------------ plumbing
 
-    def _complete(self, system: str, user: str, max_tokens: int = 500,
-                  effort: str = "low") -> Optional[str]:
+    def _complete(self, model: str, system: str, user: str,
+                  max_tokens: int = 500, effort: str = "low") -> Optional[str]:
+        kwargs: dict = {}
+        if supports_effort(model):
+            kwargs["output_config"] = {"effort": effort}
         try:
             response = self.client.messages.create(
-                model=self.model,
+                model=model,
                 max_tokens=max_tokens,
-                output_config={"effort": effort},
                 system=system,
                 messages=[{"role": "user", "content": user}],
+                **kwargs,
             )
             if response.stop_reason == "refusal":
                 return None
@@ -142,6 +160,7 @@ class LlmService:
         def job(post: dict) -> None:
             persona = sim.population[post["author_id"]]
             text = self._complete(
+                self.post_model,
                 self._persona_card(persona, sim.topic),
                 self._post_instruction(post),
                 max_tokens=500,
@@ -176,8 +195,11 @@ class LlmService:
         messages.append({"role": "user", "content": message})
         try:
             response = self.client.messages.create(
-                model=self.model,
+                model=self.chat_model,
                 max_tokens=2000,
+                # An interview reply is short and conversational; thinking would
+                # only add latency to a chat the user is waiting on.
+                thinking={"type": "disabled"},
                 system=system,
                 messages=messages,
             )
@@ -194,4 +216,4 @@ class LlmService:
         """Run the tool-using ReportAgent over a finished simulation."""
         from backend.report_agent import ReportAgent
 
-        return ReportAgent(self.client, self.model).write(sim, report)
+        return ReportAgent(self.client, self.report_model).write(sim, report)
