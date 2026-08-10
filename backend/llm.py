@@ -165,8 +165,17 @@ class LlmService:
                 self._post_instruction(post),
                 max_tokens=500,
             )
-            if text:
-                post["text"] = text[:280]
+            if not text:
+                return
+            text = text[:280]
+            post["text"] = text
+            # Write back to the simulation's own record too, so the report
+            # agent and agent memory see what the feed actually showed rather
+            # than the template it replaced.
+            stored = sim.post_by_id(post["id"])
+            if stored is not None:
+                stored.text = text
+                stored.llm_written = True
 
         list(self.pool.map(job, targets))
         return posts

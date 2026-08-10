@@ -50,7 +50,10 @@ cares about the outcome. Commit to a call — no hedging.
 
 Write in plain prose, no bullet-point soup, no preamble before the first \
 heading. Never mention that this is a simulation of agents; write as if \
-analysing a real public conversation."""
+analysing a real public conversation.
+
+Some posts are marked [template] — filler the participants did not really \
+write. Never quote those. Quote only unmarked posts as evidence."""
 
 
 def _fmt(x: float) -> str:
@@ -182,7 +185,8 @@ class ReportAgent:
                 f"conviction {agent.conviction:.2f}; {len(posts)} posts."
             )
             body = "\n".join(
-                f'R{p.round}{" (reply to " + p.reply_to + ")" if p.reply_to else ""}: "{p.text}"'
+                f'R{p.round}{" (reply to " + p.reply_to + ")" if p.reply_to else ""}: '
+                f'"{p.text}"{"" if p.llm_written else " [template]"}'
                 for p in posts[:12]
             )
             return head + ("\n" + body if body else "")
@@ -217,7 +221,8 @@ class ReportAgent:
                 )
             for p in posts:
                 author = sim.population[p.author_id]
-                lines.append(f'{author.handle}: "{p.text}" (❤️{p.likes})')
+                mark = "" if p.llm_written else " [template]"
+                lines.append(f'{author.handle}: "{p.text}" (❤️{p.likes}){mark}')
             return "\n".join(lines)
 
         @beta_tool
@@ -233,7 +238,9 @@ class ReportAgent:
             if not hits:
                 return f'No posts mention "{keyword}".'
             return "\n".join(
-                f'R{p.round} {sim.population[p.author_id].handle}: "{p.text}"' for p in hits
+                f'R{p.round} {sim.population[p.author_id].handle}: "{p.text}"'
+                f'{"" if p.llm_written else " [template]"}'
+                for p in hits
             )
 
         return [list_factions, read_agent_posts, inspect_round, search_posts]

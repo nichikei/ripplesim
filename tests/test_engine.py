@@ -136,6 +136,16 @@ def test_debate_produces_replies_and_rebuttals():
         assert reb.reply_to != sim.population[reb.author_id].handle
 
 
+def test_post_lookup_by_id_round_trips():
+    sim = Simulation(topic="lookup", n_agents=50, seed=13)
+    for _ in range(3):
+        sim.step()
+    sim.inject_event("Something happened", impact=-0.5)
+    for post in sim.posts:
+        assert sim.post_by_id(post.id) is post
+    assert sim.post_by_id(len(sim.posts) + 99) is None
+
+
 def test_event_injection_shifts_opinion():
     sim = Simulation(topic="event test", n_agents=150, seed=5)
     before = sim.metrics_history[-1]["mean_opinion"]

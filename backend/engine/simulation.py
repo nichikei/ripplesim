@@ -38,6 +38,7 @@ class Post:
     parent_text: str | None = None  # text of the post being replied to
     agrees: bool | None = None  # for replies: agreeing or pushing back?
     is_rebuttal: bool = False  # author answering back to a critical reply
+    llm_written: bool = False  # text was rewritten in-character by the LLM
 
     def to_dict(self, author: Persona) -> dict:
         return {
@@ -231,6 +232,12 @@ class Simulation:
         return record
 
     # ------------------------------------------------------------- helpers
+
+    def post_by_id(self, post_id: int) -> Post | None:
+        """Look up a stored post. Ids are assigned as the index in ``posts``."""
+        if 0 <= post_id < len(self.posts) and self.posts[post_id].id == post_id:
+            return self.posts[post_id]
+        return next((p for p in self.posts if p.id == post_id), None)
 
     @staticmethod
     def _side(agent: Persona) -> int:
