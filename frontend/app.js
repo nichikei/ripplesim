@@ -121,9 +121,12 @@ async function runSimulation() {
     });
     state.simId = sim.id;
     state.agents = sim.agents;
+    state.llmActive = sim.llm_active;
     $("composer-note").textContent =
       wantLlm && !sim.llm_active
         ? "LLM unavailable on the server — falling back to template posts."
+        : sim.llm_active
+        ? "AI mode: agents write their own posts, so each round takes a few seconds."
         : "";
     renderMetrics(sim.metrics, 0);
     onSimCreated(sim);
@@ -136,7 +139,9 @@ async function runSimulation() {
       renderPosts(step.posts);
       renderMetrics(step.metrics, step.round);
       onStep(step);
-      await sleep(650);
+      // In LLM mode the round already takes seconds; the pacing delay is only
+      // there to make instant template rounds readable.
+      if (!state.llmActive) await sleep(650);
     }
     // The report agent investigates the simulation before writing — this can
     // take a few seconds, so keep the user informed rather than looking stalled.

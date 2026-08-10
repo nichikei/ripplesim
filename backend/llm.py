@@ -59,7 +59,9 @@ class LlmService:
 
         self.client = anthropic.Anthropic()
         self.model = os.environ.get("RIPPLESIM_MODEL", DEFAULT_MODEL)
-        self.pool = ThreadPoolExecutor(max_workers=8)
+        # One worker per post so a round is a single wave of calls, not two —
+        # round latency is one API call, not ceil(posts / workers) of them.
+        self.pool = ThreadPoolExecutor(max_workers=MAX_LLM_POSTS_PER_ROUND)
 
     @classmethod
     def create(cls) -> Optional["LlmService"]:
