@@ -57,8 +57,41 @@
       <h2>Live feed <span id="feed-status"></span></h2>
       <div id="feed"></div>
     </section>
+
+    <section class="viz-column">
+      <div class="card">
+        <h2>Opinion trajectory</h2>
+        <canvas id="chart-trajectory" width="360" height="180"></canvas>
+        <div class="legend">
+          <span><i class="dot" style="background:var(--accent)"></i> mean stance</span>
+          <span><i class="dot" style="background:var(--accent-2)"></i> polarization</span>
+        </div>
+      </div>
+
+      <div class="card">
+        <h2>Stance distribution</h2>
+        <div id="dist-bar"></div>
+        <div id="dist-labels" class="legend"></div>
+      </div>
+
+      <div class="card">
+        <h2>Population map</h2>
+        <canvas id="agent-grid" width="360" height="160"></canvas>
+        <div class="legend">
+          <span><i class="dot" style="background:var(--support)"></i> support</span>
+          <span><i class="dot" style="background:#383835"></i> neutral</span>
+          <span><i class="dot" style="background:var(--oppose)"></i> oppose</span>
+        </div>
+      </div>
+
+      <div class="card hidden" id="report-card">
+        <h2>Prediction report</h2>
+        <div id="report"></div>
+      </div>
+    </section>
   </main>
 
   <script src="app.js"></script>
+  <script src="charts.js"></script>
 </body>
 </html>
