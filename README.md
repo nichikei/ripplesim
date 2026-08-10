@@ -29,11 +29,13 @@ with a deliberately small, readable core — no simulation framework, no chart l
 - **Viral spread** — emotional posts travel 2 hops instead of 1; likes/shares feed an
   engagement-based influencer ranking
 - **God mode** — inject a breaking-news event mid-run with chosen impact and reach
-- **Prediction report** — verdict (FAVORABLE / HOSTILE / DIVIDED / CONTESTED), trend,
-  stance distribution, top influencers, most viral post
+- **Prediction report** — verdict (FAVORABLE / HOSTILE / DIVIDED / CONTESTED), faction
+  breakdown by archetype, turning-point rounds, debate statistics, top influencers
+- **Export** — read the full report in-app, download it as Markdown, or print to PDF
 - **Live dashboard** — real-time feed, hand-rolled canvas charts with hover tooltips
   (opinion trajectory, stance distribution, population map), zero front-end dependencies
-- **Reproducible** — pass a `seed` for deterministic runs; 13 unit tests on the engine
+- **Reproducible** — pass a `seed` for deterministic runs; 18 unit tests on the engine
+  and the report
 
 **LLM layer (with an Anthropic API key)**
 
@@ -43,7 +45,8 @@ with a deliberately small, readable core — no simulation framework, no chart l
   reacting with canned attitude
 - **Interview any agent** — click an agent in the feed or population map and ask why it
   believes what it believes, or what changed its mind
-- **AI analyst** — Claude reads the simulation results and writes the closing analysis
+- **ReportAgent** — a tool-using analyst that *investigates* the finished simulation
+  (see below) and writes the final report itself
 
 ## 🚀 Quickstart
 
@@ -78,8 +81,9 @@ python -m pytest tests/ -q
 frontend/  (vanilla JS + hand-rolled canvas charts)
    │  fetch /api/*
    ▼
-backend/app.py          FastAPI — simulation lifecycle, agent chat
-backend/llm.py          LlmService — in-character posts, interviews, analysis
+backend/app.py          FastAPI — simulation lifecycle, agent chat, report export
+backend/llm.py          LlmService — in-character posts and interviews
+backend/report_agent.py ReportAgent — tool-using analyst + Markdown renderer
 backend/engine/         (pure simulation, no LLM dependency)
    personas.py          archetype-based population generator + agent memory
    network.py           Barabási–Albert scale-free graph
@@ -94,8 +98,22 @@ of posts the user actually sees. That keeps runs reproducible, cheap, and fully
 functional offline — while the LLM layer supplies the language and the interviews.
 
 **Simulation round:** agents wake up by sociability → each writes a post → virality
-decides reach (1–2 hops) → readers update opinions via bounded confidence → likes and
-shares accrue to the author → population metrics recorded.
+decides reach (1–2 hops) → readers update opinions via bounded confidence → some reply,
+and criticised authors answer back → likes and shares accrue → metrics recorded.
+
+**The ReportAgent** is not a summarisation prompt. When a run finishes it is handed four
+tools over the finished simulation and decides for itself what to look at:
+
+| Tool | What it returns |
+|---|---|
+| `list_factions()` | every archetype group, its size, and how far it moved |
+| `read_agent_posts(handle)` | one agent's posts and its stance trajectory |
+| `inspect_round(n)` | that round's metrics, injected event, and top posts |
+| `search_posts(keyword)` | posts matching a keyword across the whole feed |
+
+It investigates (capped at 10 tool iterations), then writes the report in Markdown with
+evidence — real handles and quoted posts — behind each claim. Without an API key the same
+report is generated deterministically from the same evidence, so the feature never breaks.
 
 ## 📡 API
 
@@ -105,7 +123,8 @@ shares accrue to the author → population metrics recorded.
 | GET  | `/api/simulations/{id}` | Current state, metrics history, agents |
 | POST | `/api/simulations/{id}/step` | Advance one round; returns that round's posts |
 | POST | `/api/simulations/{id}/inject` | Inject a breaking-news event (`headline`, `impact`, `reach`) |
-| GET  | `/api/simulations/{id}/report` | Final prediction report (+ `ai_analysis` in LLM mode) |
+| GET  | `/api/simulations/{id}/report` | Final report incl. rendered Markdown |
+| GET  | `/api/simulations/{id}/report.md` | Download the report as a Markdown file |
 | POST | `/api/simulations/{id}/agents/{agent_id}/chat` | Interview an agent (`message`, `history`) |
 
 ## 🔬 Model notes
@@ -123,5 +142,5 @@ shares accrue to the author → population metrics recorded.
 
 - [ ] Network visualization (force-directed graph)
 - [ ] Multiple competing topics in one society
-- [ ] Export report as PDF
 - [ ] Persist simulations (currently in-memory)
+- [ ] Compare two scenarios side by side
