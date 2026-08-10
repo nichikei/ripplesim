@@ -1,15 +1,13 @@
 """Post content generation.
 
-Default mode is template-based (fast, free, deterministic under a seed):
-each stance bucket has a pool of post templates with a ``{topic}`` slot.
-An optional LLM generator can be plugged in via ``set_llm_writer`` — the
-simulation stays agnostic about where text comes from.
+Template-based (fast, free, deterministic under a seed): each stance bucket
+has a pool of post templates with a ``{topic}`` slot. When the LLM layer is
+active, it rewrites the *displayed* posts on top of these templates.
 """
 
 from __future__ import annotations
 
 import random
-from typing import Callable, Optional
 
 from .personas import Persona
 
@@ -81,24 +79,13 @@ CONVERSION = {
 }
 
 
-# Optional pluggable LLM writer: (persona, topic, stance) -> post text
-LlmWriter = Callable[[Persona, str, str], Optional[str]]
-_llm_writer: Optional[LlmWriter] = None
-
-
-def set_llm_writer(writer: Optional[LlmWriter]) -> None:
-    global _llm_writer
-    _llm_writer = writer
-
-
 def write_post(persona: Persona, topic: str, rng: random.Random) -> str:
-    """Generate the text of one post for ``persona`` about ``topic``."""
-    stance = persona.stance
-    if _llm_writer is not None:
-        text = _llm_writer(persona, topic, stance)
-        if text:
-            return text
-    return rng.choice(TEMPLATES[stance]).format(topic=topic)
+    """Generate the template text of one post for ``persona`` about ``topic``.
+
+    LLM-written text is layered on top by ``backend.llm`` for the posts that
+    actually appear in the feed — the engine itself stays LLM-free.
+    """
+    return rng.choice(TEMPLATES[persona.stance]).format(topic=topic)
 
 
 def write_reply(topic: str, target_handle: str, agree: bool, rng: random.Random) -> str:

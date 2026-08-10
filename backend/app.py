@@ -22,15 +22,27 @@ from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
 
-from backend.engine import content
 from backend.engine.report import build_report
 from backend.engine.simulation import Simulation
-from backend.llm import make_llm_writer
+from backend.llm import LlmService
 
-app = FastAPI(title="RippleSim", version="0.1.0")
+app = FastAPI(title="RippleSim", version="0.2.0")
 
 SIMULATIONS: dict[str, Simulation] = {}
+LLM_SIMS: set[str] = set()  # simulations running with LLM-written posts
 FRONTEND_DIR = Path(__file__).resolve().parent.parent / "frontend"
+
+_llm: LlmService | None = None
+_llm_checked = False
+
+
+def get_llm() -> LlmService | None:
+    """Lazily build the shared LLM service (None when unavailable)."""
+    global _llm, _llm_checked
+    if not _llm_checked:
+        _llm = LlmService.create()
+        _llm_checked = True
+    return _llm
 
 
 class CreateSimRequest(BaseModel):
@@ -58,18 +70,14 @@ def _get_sim(sim_id: str) -> Simulation:
 
 @app.post("/api/simulations")
 def create_simulation(req: CreateSimRequest) -> dict:
-    llm_active = False
-    if req.use_llm:
-        writer = make_llm_writer()
-        content.set_llm_writer(writer)
-        llm_active = writer is not None
-    else:
-        content.set_llm_writer(None)
+    llm_active = bool(req.use_llm and get_llm())
 
     sim_id = uuid.uuid4().hex[:8]
     SIMULATIONS[sim_id] = Simulation(
         topic=req.topic, n_agents=req.n_agents, seed=req.seed, bias=req.bias
     )
+    if llm_active:
+        LLM_SIMS.add(sim_id)
     sim = SIMULATIONS[sim_id]
     return {
         "id": sim_id,
@@ -99,6 +107,8 @@ def get_simulation(sim_id: str) -> dict:
 def step_simulation(sim_id: str) -> dict:
     sim = _get_sim(sim_id)
     posts = sim.step()
+    if sim_id in LLM_SIMS and (llm := get_llm()):
+        posts = llm.rewrite_posts(sim, posts)
     return {
         "round": sim.round,
         "posts": posts,
@@ -116,7 +126,37 @@ def inject_event(sim_id: str, req: InjectEventRequest) -> dict:
 
 @app.get("/api/simulations/{sim_id}/report")
 def get_report(sim_id: str) -> dict:
-    return build_report(_get_sim(sim_id))
+    report = build_report(_get_sim(sim_id))
+    if sim_id in LLM_SIMS and (llm := get_llm()):
+        report["ai_analysis"] = llm.report_analysis(report)
+    return report
+
+
+class ChatRequest(BaseModel):
+    message: str = Field(min_length=1, max_length=1000)
+    history: list[dict] = Field(default_factory=list, max_length=24)
+
+
+@app.post("/api/simulations/{sim_id}/agents/{agent_id}/chat")
+def chat_with_agent(sim_id: str, agent_id: int, req: ChatRequest) -> dict:
+    """Interview a simulated agent (requires the LLM to be available)."""
+    sim = _get_sim(sim_id)
+    if not 0 <= agent_id < len(sim.population):
+        raise HTTPException(status_code=404, detail="agent not found")
+    llm = get_llm()
+    if llm is None:
+        raise HTTPException(status_code=503,
+                            detail="LLM unavailable — set ANTHROPIC_API_KEY on the server")
+    persona = sim.population[agent_id]
+    reply = llm.chat(persona, sim, req.history, req.message)
+    if reply is None:
+        raise HTTPException(status_code=502, detail="LLM request failed")
+    return {
+        "reply": reply,
+        "agent": {"id": persona.id, "name": persona.name, "handle": persona.handle,
+                  "avatar": persona.avatar, "archetype": persona.archetype,
+                  "opinion": round(persona.opinion, 3)},
+    }
 
 
 # --- static frontend -------------------------------------------------------
