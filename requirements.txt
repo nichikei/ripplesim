@@ -4,5 +4,6 @@ pydantic>=2.6
 pytest>=8.0
 httpx>=0.27
 
-# Optional — only needed for the LLM layer (in-character posts, interviews)
-anthropic>=0.40
+# Optional — only needed for the LLM layer (in-character posts, interviews).
+# 0.121+ is required for output_config/effort support.
+anthropic>=0.121
