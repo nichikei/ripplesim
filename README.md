@@ -1,5 +1,9 @@
 # 🌊 RippleSim
 
+[![CI](https://github.com/PhamNhatKhanhs/ripplesim/actions/workflows/ci.yml/badge.svg)](https://github.com/PhamNhatKhanhs/ripplesim/actions/workflows/ci.yml)
+[![Python 3.11+](https://img.shields.io/badge/python-3.11%2B-blue)](https://www.python.org/)
+[![License: MIT](https://img.shields.io/badge/license-MIT-green)](LICENSE)
+
 **Drop a piece of news into a virtual society — watch the ripples of public opinion spread.**
 
 RippleSim is a multi-agent social simulation engine. Given a seed event (a news headline,
