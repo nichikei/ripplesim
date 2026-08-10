@@ -38,8 +38,8 @@ with a deliberately small, readable core — no simulation framework, no chart l
 - **Export** — read the full report in-app, download it as Markdown, or print to PDF
 - **Live dashboard** — real-time feed, hand-rolled canvas charts with hover tooltips
   (opinion trajectory, stance distribution, population map), zero front-end dependencies
-- **Reproducible** — pass a `seed` for deterministic runs; 18 unit tests on the engine
-  and the report
+- **Reproducible** — pass a `seed` for deterministic runs; 25 unit tests on the engine,
+  the report, and the LLM configuration
 
 **LLM layer (with an Anthropic API key)**
 
@@ -70,8 +70,26 @@ cp .env.example .env    # then edit .env and paste your key
 
 An `ANTHROPIC_API_KEY` already exported in the environment works too and takes priority.
 
+**Model per job.** Each job runs on the cheapest model that does it well, overridable
+via environment variables:
+
+| Job | Default model | Why |
+|---|---|---|
+| Writing posts | `claude-haiku-4-5` | ~10 calls per round, short in-character text — the volume driver |
+| Interviewing an agent | `claude-sonnet-5` | Conversational quality matters; one call per message |
+| ReportAgent | `claude-sonnet-5` | Tool use plus analysis; one run per simulation |
+
+Override with `RIPPLESIM_POST_MODEL`, `RIPPLESIM_CHAT_MODEL`, `RIPPLESIM_REPORT_MODEL`.
+
+> Note for anyone changing these: `output_config.effort` is rejected by Haiku 4.5 and
+> Sonnet 4.5, so `llm.supports_effort()` gates it per model rather than sending it
+> unconditionally.
+
+Measured on a 40-agent run: ~2.3s per round on Haiku (it was ~15s before this split),
+plus roughly 35s for the report agent's investigation at the end.
+
 Cost control: only the ~10 posts that actually appear in the feed each round are written
-by the LLM (concurrently) — the other ~300 interactions stay numeric.
+by the LLM (in one concurrent wave) — the other ~300 interactions stay numeric.
 
 Run tests:
 
