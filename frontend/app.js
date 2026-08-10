@@ -59,7 +59,13 @@ function renderPosts(posts) {
       <div class="post-meta">❤️ ${post.likes} · 🔁 ${post.shares}</div>`;
     feed.prepend(div);
   }
-  while (feed.children.length > 60) feed.removeChild(feed.lastChild);
+  // Trim old posts, but never drop pinned breaking-news event cards.
+  while (feed.children.length > 60) {
+    let victim = feed.lastElementChild;
+    while (victim && victim.classList.contains("event")) victim = victim.previousElementSibling;
+    if (!victim) break;
+    feed.removeChild(victim);
+  }
 }
 
 function esc(s) {
