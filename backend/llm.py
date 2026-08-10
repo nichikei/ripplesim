@@ -122,7 +122,9 @@ class LlmService:
             f"you started at {persona.initial_opinion:+.2f}).\n"
             f"Posts you recently read:\n{memory}\n"
             "Stay fully in character. Write casual social-media prose in your "
-            "own voice; never mention being an AI or a simulation."
+            "own voice; never mention being an AI or a simulation.\n"
+            "Write in the same language the topic is written in — if the topic "
+            "is in Vietnamese, post in Vietnamese, and so on."
         )
 
     # ------------------------------------------------------- post writing
