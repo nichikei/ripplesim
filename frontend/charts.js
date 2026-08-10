@@ -3,13 +3,13 @@
    orange = polarization, red = oppose pole, gray = neutral midpoint. */
 
 const COLORS = {
-  blue: "#3987e5",
-  orange: "#d95926",
-  red: "#e66767",
-  gray: "#898781",
-  midGray: "#383835",
-  grid: "#2c2c2a",
-  ink2: "#c3c2b7",
+  blue: "#2a78d6",
+  orange: "#eb6834",
+  red: "#e34948",
+  gray: "#8b857a",
+  midGray: "#ddd8ca",
+  grid: "#e7e3d8",
+  ink2: "#57534a",
 };
 
 let history = [];   // metrics per round
@@ -97,9 +97,9 @@ function lerp(a, b, t) {
   return Math.round(a + (b - a) * t);
 }
 function divergingColor(opinion) {
-  // neutral midpoint gray -> blue (support) or red (oppose)
-  const mid = [0x38, 0x38, 0x35];
-  const pole = opinion >= 0 ? [0x39, 0x87, 0xe5] : [0xe6, 0x67, 0x67];
+  // neutral midpoint -> blue (support) or red (oppose)
+  const mid = [0xdd, 0xd8, 0xca];
+  const pole = opinion >= 0 ? [0x2a, 0x78, 0xd6] : [0xe3, 0x49, 0x48];
   const t = Math.min(1, Math.abs(opinion));
   return `rgb(${lerp(mid[0], pole[0], t)},${lerp(mid[1], pole[1], t)},${lerp(mid[2], pole[2], t)})`;
 }
