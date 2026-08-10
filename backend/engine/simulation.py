@@ -124,8 +124,8 @@ class Simulation:
         touched = 0
         for agent in self.population:
             if self.rng.random() < reach:
-                # News from "outside" is trusted more than a random post.
-                opinion.apply_influence(agent, impact, weight=1.5)
+                # Broadcast news bypasses bounded confidence (no backfire).
+                opinion.apply_news_shock(agent, impact)
                 touched += 1
 
         event_post = Post(

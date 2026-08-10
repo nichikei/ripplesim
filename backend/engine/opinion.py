@@ -49,6 +49,18 @@ def apply_influence(agent: Persona, post_opinion: float, weight: float = 1.0) ->
         agent.opinion = _clamp(agent.opinion - BACKFIRE_RATE * weight * (1 if gap > 0 else -1))
 
 
+def apply_news_shock(agent: Persona, impact: float, weight: float = 1.0) -> None:
+    """Update for *broadcast news* rather than a peer's post.
+
+    News from outside the network is not subject to bounded confidence —
+    people may discount it, but it doesn't backfire the way an extreme
+    stranger's post does. Everyone drifts toward the event's implication,
+    scaled by how open-minded they are.
+    """
+    rate = 0.3 * (1.0 - 0.7 * agent.conviction) * weight
+    agent.opinion = _clamp(agent.opinion + rate * (impact - agent.opinion))
+
+
 def snapshot_metrics(population: list[Persona]) -> dict:
     """Population metrics for one simulation round."""
     opinions = [p.opinion for p in population]
