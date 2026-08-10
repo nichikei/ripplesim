@@ -47,8 +47,18 @@ class Persona:
     conviction: float     # 0..1, resistance to changing opinion
     sociability: float    # 0..1, probability of being active each round
     expressiveness: float # 0..1, emotional intensity of posts
+    initial_opinion: float = 0.0  # where the agent started, for trajectory context
     posts_made: int = 0
     engagement: int = field(default=0)  # likes + shares received, for influence ranking
+    memory: list[str] = field(default_factory=list)  # recent posts this agent read
+
+    MEMORY_SIZE = 5
+
+    def remember(self, post_text: str) -> None:
+        """Keep a short rolling memory of what this agent has read."""
+        self.memory.append(post_text)
+        if len(self.memory) > self.MEMORY_SIZE:
+            self.memory.pop(0)
 
     @property
     def stance(self) -> str:
@@ -88,6 +98,7 @@ def generate_population(n: int, rng: random.Random, bias: float = 0.0) -> list[P
             handle = f"@{first.lower()}{rng.randint(1, 9999)}"
         used_handles.add(handle)
 
+        opinion = _clamp(rng.gauss(mu + bias * 0.4, sigma))
         population.append(
             Persona(
                 id=i,
@@ -95,10 +106,11 @@ def generate_population(n: int, rng: random.Random, bias: float = 0.0) -> list[P
                 handle=handle,
                 avatar=rng.choice(AVATARS),
                 archetype=arch,
-                opinion=_clamp(rng.gauss(mu + bias * 0.4, sigma)),
+                opinion=opinion,
                 conviction=rng.uniform(*conv),
                 sociability=rng.uniform(*soc),
                 expressiveness=rng.uniform(*expr),
+                initial_opinion=opinion,
             )
         )
     return population

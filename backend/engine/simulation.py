@@ -35,11 +35,14 @@ class Post:
     is_event: bool = False
     is_conversion: bool = False  # agent announcing it switched sides
     reply_to: str | None = None  # handle of the post being replied to
+    parent_text: str | None = None  # text of the post being replied to
+    agrees: bool | None = None  # for replies: agreeing or pushing back?
 
     def to_dict(self, author: Persona) -> dict:
         return {
             "id": self.id,
             "round": self.round,
+            "author_id": self.author_id,
             "author": author.name,
             "handle": author.handle,
             "avatar": author.avatar,
@@ -49,7 +52,10 @@ class Post:
             "likes": self.likes,
             "shares": self.shares,
             "is_event": self.is_event,
+            "is_conversion": self.is_conversion,
             "reply_to": self.reply_to,
+            "parent_text": self.parent_text,
+            "agrees": self.agrees,
         }
 
 
@@ -84,6 +90,7 @@ class Simulation:
         new_posts: list[Post] = []
 
         active = [p for p in self.population if self.rng.random() < p.sociability * 0.5]
+        pending_rebuttals: list[tuple[Persona, Post]] = []
         for author in active:
             text = content.write_post(author, self.topic, self.rng)
             post = Post(
@@ -101,6 +108,7 @@ class Simulation:
             replies_left = 2  # cap replies per post so threads don't explode
             for reader_id in audience:
                 reader = self.population[reader_id]
+                reader.remember(post.text)
                 # Hub authors carry more weight; viral posts hit harder.
                 weight = 0.6 + 0.4 * post.virality
                 opinion.apply_influence(reader, post.opinion, weight)
@@ -121,13 +129,36 @@ class Simulation:
                         opinion=reader.opinion,
                         virality=post.virality * 0.5,
                         reply_to=author.handle,
+                        parent_text=post.text,
+                        agrees=agree,
                     )
                     reader.posts_made += 1
                     author.engagement += 2  # being replied to is engagement too
                     new_posts.append(reply)
                     replies_left -= 1
+                    # Criticism stings: expressive authors often fire back.
+                    if not agree and self.rng.random() < 0.5 + 0.4 * author.expressiveness:
+                        pending_rebuttals.append((author, reply))
             author.engagement += post.likes + post.shares * 3
             new_posts.append(post)
+
+        # The debate continues: authors who took criticism fire back once.
+        for author, reply in pending_rebuttals[:3]:
+            replier = self.population[reply.author_id]
+            author.remember(reply.text)
+            new_posts.append(Post(
+                id=0,
+                round=self.round,
+                author_id=author.id,
+                text=content.write_rebuttal(self.topic, replier.handle, self.rng),
+                opinion=author.opinion,
+                virality=0.5,
+                reply_to=replier.handle,
+                parent_text=reply.text,
+                agrees=False,
+            ))
+            author.posts_made += 1
+            replier.engagement += 2
 
         # Agents who drifted to the opposite side since they last showed one
         # may publicly announce the change of heart.
@@ -160,7 +191,7 @@ class Simulation:
         replies = [p for p in new_posts if p.reply_to is not None]
         ordinary = [p for p in new_posts if not p.is_conversion and p.reply_to is None]
         ordinary.sort(key=lambda p: p.likes + p.shares * 3, reverse=True)
-        shown = conversions[:2] + replies[:3] + ordinary
+        shown = conversions[:2] + replies[:4] + ordinary
         return [p.to_dict(self.population[p.author_id]) for p in shown]
 
     # ----------------------------------------------------------- god mode

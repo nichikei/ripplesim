@@ -60,6 +60,13 @@ REPLY_DISAGREE = [
     "{handle} You're missing the whole point of {topic}, honestly.",
 ]
 
+REBUTTAL = [
+    "{handle} I stand by every word. Nothing you said changes the facts about {topic}.",
+    "{handle} Nice try, but you're arguing against a point I never made.",
+    "{handle} I've heard that one before. It didn't hold up then either.",
+    "{handle} We clearly read very different things about {topic}. Agree to disagree.",
+]
+
 CONVERSION = {
     "to_support": [
         "Okay, I've been reading the threads on {topic}... I was wrong. I'm coming around.",
@@ -98,6 +105,11 @@ def write_reply(topic: str, target_handle: str, agree: bool, rng: random.Random)
     """A short reply to another agent's post."""
     pool = REPLY_AGREE if agree else REPLY_DISAGREE
     return rng.choice(pool).format(handle=target_handle, topic=topic)
+
+
+def write_rebuttal(topic: str, target_handle: str, rng: random.Random) -> str:
+    """The original author pushing back on a critical reply."""
+    return rng.choice(REBUTTAL).format(handle=target_handle, topic=topic)
 
 
 def write_conversion(topic: str, now_supports: bool, rng: random.Random) -> str:
