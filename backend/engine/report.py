@@ -7,6 +7,9 @@ conversation and which posts defined it.
 
 from __future__ import annotations
 
+from collections import defaultdict
+from statistics import fmean
+
 from .simulation import Simulation
 
 
@@ -31,6 +34,58 @@ def _verdict(mean: float, polarization: float) -> str:
     if mean < -0.25:
         return "HOSTILE — public opinion leans clearly negative"
     return "CONTESTED — no dominant narrative yet"
+
+
+def faction_breakdown(sim: Simulation) -> list[dict]:
+    """How each archetype ended up, and how far it moved."""
+    groups: dict[str, list] = defaultdict(list)
+    for p in sim.population:
+        groups[p.archetype].append(p)
+
+    factions = []
+    for archetype, members in groups.items():
+        start = fmean(p.initial_opinion for p in members)
+        end = fmean(p.opinion for p in members)
+        factions.append({
+            "archetype": archetype,
+            "size": len(members),
+            "start_mean": round(start, 3),
+            "end_mean": round(end, 3),
+            "shift": round(end - start, 3),
+            "supporters": sum(1 for p in members if p.opinion >= 0.15),
+            "opponents": sum(1 for p in members if p.opinion <= -0.15),
+        })
+    return sorted(factions, key=lambda f: abs(f["shift"]), reverse=True)
+
+
+def key_moments(sim: Simulation, k: int = 3) -> list[dict]:
+    """Rounds where opinion moved most — the turning points of the story."""
+    moments = []
+    history = sim.metrics_history
+    for prev, cur in zip(history, history[1:]):
+        delta = cur["mean_opinion"] - prev["mean_opinion"]
+        event = next((e for e in sim.events if e["round"] == cur["round"]), None)
+        moments.append({
+            "round": cur["round"],
+            "shift": round(delta, 4),
+            "mean_opinion": cur["mean_opinion"],
+            "polarization": cur["polarization"],
+            "event": event["headline"] if event else None,
+        })
+    return sorted(moments, key=lambda m: abs(m["shift"]), reverse=True)[:k]
+
+
+def debate_stats(sim: Simulation) -> dict:
+    """How much of the activity was actual conversation vs broadcasting."""
+    replies = [p for p in sim.posts if p.reply_to]
+    return {
+        "total_posts": len(sim.posts),
+        "replies": len(replies),
+        "rebuttals": sum(1 for p in sim.posts if p.is_rebuttal),
+        "agreeing_replies": sum(1 for p in replies if p.agrees),
+        "disagreeing_replies": sum(1 for p in replies if p.agrees is False),
+        "conversions": sum(1 for p in sim.posts if p.is_conversion),
+    }
 
 
 def build_report(sim: Simulation) -> dict:
@@ -67,6 +122,9 @@ def build_report(sim: Simulation) -> dict:
         "final": last,
         "events": sim.events,
         "trajectory": sim.metrics_history,
+        "factions": faction_breakdown(sim),
+        "key_moments": key_moments(sim),
+        "debate": debate_stats(sim),
         "top_influencers": [
             {
                 "name": p.name,

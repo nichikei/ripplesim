@@ -18,13 +18,14 @@ import uuid
 from pathlib import Path
 
 from fastapi import FastAPI, HTTPException
-from fastapi.responses import FileResponse
+from fastapi.responses import FileResponse, PlainTextResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
 
 from backend.engine.report import build_report
 from backend.engine.simulation import Simulation
 from backend.llm import LlmService
+from backend.report_agent import render_markdown
 
 app = FastAPI(title="RippleSim", version="0.2.0")
 
@@ -124,12 +125,43 @@ def inject_event(sim_id: str, req: InjectEventRequest) -> dict:
     return {"event": record, "metrics": sim.metrics_history[-1], "agents": sim.agents_summary()}
 
 
+REPORT_CACHE: dict[str, str] = {}  # sim_id -> markdown (agent runs are expensive)
+
+
+def _report_markdown(sim_id: str) -> tuple[dict, str, bool]:
+    """Build the report and its Markdown rendering. Returns (report, md, by_agent)."""
+    sim = _get_sim(sim_id)
+    report = build_report(sim)
+    if sim_id in REPORT_CACHE:
+        return report, REPORT_CACHE[sim_id], True
+
+    written = None
+    if sim_id in LLM_SIMS and (llm := get_llm()):
+        written = llm.write_report(sim, report)
+    markdown = written or render_markdown(report)
+    if written:
+        REPORT_CACHE[sim_id] = markdown
+    return report, markdown, bool(written)
+
+
 @app.get("/api/simulations/{sim_id}/report")
 def get_report(sim_id: str) -> dict:
-    report = build_report(_get_sim(sim_id))
-    if sim_id in LLM_SIMS and (llm := get_llm()):
-        report["ai_analysis"] = llm.report_analysis(report)
+    report, markdown, by_agent = _report_markdown(sim_id)
+    report["markdown"] = markdown
+    report["written_by_agent"] = by_agent
     return report
+
+
+@app.get("/api/simulations/{sim_id}/report.md", response_class=PlainTextResponse)
+def download_report(sim_id: str) -> PlainTextResponse:
+    """Download the report as a Markdown file."""
+    _, markdown, _ = _report_markdown(sim_id)
+    slug = "".join(c if c.isalnum() else "-" for c in _get_sim(sim_id).topic).strip("-")[:60]
+    return PlainTextResponse(
+        markdown,
+        media_type="text/markdown; charset=utf-8",
+        headers={"Content-Disposition": f'attachment; filename="ripplesim-{slug or sim_id}.md"'},
+    )
 
 
 class ChatRequest(BaseModel):

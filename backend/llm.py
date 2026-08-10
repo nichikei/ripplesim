@@ -188,34 +188,8 @@ class LlmService:
 
     # ------------------------------------------------------------ report
 
-    def report_analysis(self, report: dict) -> Optional[str]:
-        """A short analyst's narrative on top of the numeric report."""
-        top_posts = "\n".join(
-            f'- {p["handle"]} ({p["stance"]}): "{p["text"]}" ({p["likes"]} likes)'
-            for p in report.get("top_posts", [])[:5]
-        )
-        events = "\n".join(
-            f'- round {e["round"]}: "{e["headline"]}" (impact {e["impact"]:+.1f})'
-            for e in report.get("events", [])
-        ) or "- none"
-        user = (
-            f'Topic: {report["topic"]}\n'
-            f'Rounds: {report["rounds"]}, total posts: {report["total_posts"]}\n'
-            f'Mean stance: {report["initial"]["mean_opinion"]:+.2f} -> '
-            f'{report["final"]["mean_opinion"]:+.2f}, '
-            f'polarization {report["final"]["polarization"]:.2f}\n'
-            f'Final counts: {report["final"]["counts"]}\n'
-            f"Injected events:\n{events}\n"
-            f"Most engaging posts:\n{top_posts}"
-        )
-        return self._complete(
-            system=(
-                "You are a public-opinion analyst reviewing the results of a "
-                "multi-agent social simulation. Write a sharp 3-5 sentence "
-                "analysis: what happened, what drove it, and one concrete "
-                "prediction or recommendation. No headers, no bullet points."
-            ),
-            user=user,
-            max_tokens=2000,
-            effort="medium",
-        )
+    def write_report(self, sim, report: dict) -> Optional[str]:
+        """Run the tool-using ReportAgent over a finished simulation."""
+        from backend.report_agent import ReportAgent
+
+        return ReportAgent(self.client, self.model).write(sim, report)
