@@ -117,6 +117,7 @@
           <span><i class="dot" style="background:var(--support)"></i> support</span>
           <span><i class="dot" style="background:var(--neutral-mid)"></i> neutral</span>
           <span><i class="dot" style="background:var(--oppose)"></i> oppose</span>
+          <span class="legend-hint">· click a tile to interview 🎤</span>
         </div>
       </div>
 
@@ -131,6 +132,23 @@
     <span>RippleSim — a multi-agent social opinion simulation engine.</span>
     <span>FastAPI · vanilla JS · hand-rolled canvas charts</span>
   </footer>
+
+  <div id="chat-drawer" class="chat-drawer hidden" role="dialog" aria-label="Interview agent">
+    <div class="chat-head">
+      <span id="chat-avatar" class="chat-avatar"></span>
+      <div class="chat-who">
+        <b id="chat-name"></b>
+        <span id="chat-sub"></span>
+      </div>
+      <button id="chat-close" class="chat-close" aria-label="Close">✕</button>
+    </div>
+    <div id="chat-messages"></div>
+    <form id="chat-form">
+      <input id="chat-input" type="text" maxlength="1000"
+             placeholder="Ask this agent anything…" autocomplete="off" />
+      <button class="btn btn-primary" type="submit">Send</button>
+    </form>
+  </div>
 
   <script src="app.js"></script>
   <script src="charts.js"></script>

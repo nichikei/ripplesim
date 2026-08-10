@@ -7,6 +7,7 @@ const state = {
   simId: null,
   running: false,
   totalRounds: 12,
+  agents: [],
 };
 
 /* ---- slider labels ---- */
@@ -59,7 +60,8 @@ function renderPosts(posts) {
     const div = document.createElement("div");
     div.className = `post ${post.stance}${post.reply_to ? " reply" : ""}`;
     const replyTag = post.reply_to
-      ? `<span class="post-reply-tag">↩ ${esc(post.reply_to)}</span>` : "";
+      ? `<span class="post-reply-tag">${post.is_rebuttal ? "⚔ answering" : "↩"} ${esc(post.reply_to)}</span>`
+      : "";
     div.innerHTML = `
       <div class="post-head">
         <span>${post.avatar}</span>
@@ -68,8 +70,17 @@ function renderPosts(posts) {
         ${replyTag}
         <span class="post-round">R${post.round}</span>
       </div>
+      ${post.parent_text ? `<div class="post-quote">${esc(post.parent_text)}</div>` : ""}
       <div class="post-text">${esc(post.text)}</div>
       <div class="post-meta">❤️ ${post.likes} · 🔁 ${post.shares}</div>`;
+    if (!post.is_event && post.author_id !== undefined) {
+      div.classList.add("clickable");
+      div.title = "Interview this agent";
+      div.addEventListener("click", () => {
+        const agent = state.agents[post.author_id];
+        if (agent) openChat(agent);
+      });
+    }
     feed.prepend(div);
   }
   // Trim old posts, but never drop pinned breaking-news event cards.
@@ -108,6 +119,7 @@ async function runSimulation() {
       use_llm: wantLlm,
     });
     state.simId = sim.id;
+    state.agents = sim.agents;
     $("composer-note").textContent =
       wantLlm && !sim.llm_active
         ? "LLM unavailable on the server — falling back to template posts."
@@ -119,6 +131,7 @@ async function runSimulation() {
       setStatus("running", `Running — round ${round}/${state.totalRounds}`);
       setProgress(round, state.totalRounds);
       const step = await api(`/simulations/${state.simId}/step`, "POST");
+      state.agents = step.agents;
       renderPosts(step.posts);
       renderMetrics(step.metrics, step.round);
       onStep(step);
@@ -153,6 +166,57 @@ async function injectEvent() {
   ]);
   onInject(res);
 }
+
+/* ---- agent interview chat ---- */
+const chat = { agentId: null, history: [] };
+
+function openChat(agent) {
+  chat.agentId = agent.id;
+  chat.history = [];
+  const stance = (agent.opinion >= 0 ? "+" : "") + Number(agent.opinion).toFixed(2);
+  $("chat-avatar").textContent = agent.avatar;
+  $("chat-name").textContent = `${agent.name} ${agent.handle}`;
+  $("chat-sub").textContent = `${agent.archetype} · stance ${stance} · ${agent.followers ?? "?"} followers`;
+  $("chat-messages").innerHTML =
+    `<div class="chat-note">You're interviewing a simulated agent. Ask why they believe what they believe — or what would change their mind.</div>`;
+  $("chat-drawer").classList.remove("hidden");
+  $("chat-input").focus();
+}
+
+function addChatMsg(cls, text) {
+  const div = document.createElement("div");
+  div.className = `chat-msg ${cls}`;
+  div.textContent = text;
+  $("chat-messages").appendChild(div);
+  $("chat-messages").scrollTop = 1e9;
+  return div;
+}
+
+$("chat-close").addEventListener("click", () => $("chat-drawer").classList.add("hidden"));
+
+$("chat-form").addEventListener("submit", async (e) => {
+  e.preventDefault();
+  const message = $("chat-input").value.trim();
+  if (!message || chat.agentId === null || !state.simId) return;
+  $("chat-input").value = "";
+  addChatMsg("user", message);
+  const typing = addChatMsg("agent typing", "…");
+  try {
+    const res = await api(
+      `/simulations/${state.simId}/agents/${chat.agentId}/chat`, "POST",
+      { message, history: chat.history }
+    );
+    typing.remove();
+    addChatMsg("agent", res.reply);
+    chat.history.push({ role: "user", content: message },
+                      { role: "assistant", content: res.reply });
+  } catch (err) {
+    typing.remove();
+    addChatMsg("agent error", err.message.includes("503")
+      ? "LLM is not available — start the server with ANTHROPIC_API_KEY set to interview agents."
+      : `Something went wrong: ${err.message}`);
+  }
+});
 
 /* Extension hooks — implemented by charts.js (kept as no-ops until then). */
 let onSimCreated = () => {};

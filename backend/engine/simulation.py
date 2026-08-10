@@ -37,6 +37,7 @@ class Post:
     reply_to: str | None = None  # handle of the post being replied to
     parent_text: str | None = None  # text of the post being replied to
     agrees: bool | None = None  # for replies: agreeing or pushing back?
+    is_rebuttal: bool = False  # author answering back to a critical reply
 
     def to_dict(self, author: Persona) -> dict:
         return {
@@ -56,6 +57,7 @@ class Post:
             "reply_to": self.reply_to,
             "parent_text": self.parent_text,
             "agrees": self.agrees,
+            "is_rebuttal": self.is_rebuttal,
         }
 
 
@@ -156,6 +158,7 @@ class Simulation:
                 reply_to=replier.handle,
                 parent_text=reply.text,
                 agrees=False,
+                is_rebuttal=True,
             ))
             author.posts_made += 1
             replier.engagement += 2
@@ -189,6 +192,9 @@ class Simulation:
         # signal, so they always make the cut ahead of ordinary posts.
         conversions = [p for p in new_posts if p.is_conversion]
         replies = [p for p in new_posts if p.reply_to is not None]
+        # Rebuttals are the most interesting social signal — an actual
+        # back-and-forth — so they lead the reply queue.
+        replies.sort(key=lambda p: not p.is_rebuttal)
         ordinary = [p for p in new_posts if not p.is_conversion and p.reply_to is None]
         ordinary.sort(key=lambda p: p.likes + p.shares * 3, reverse=True)
         shown = conversions[:2] + replies[:4] + ordinary

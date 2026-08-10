@@ -145,7 +145,8 @@ async function renderReport() {
       )
       .join("")}
     <h3>Most viral post</h3>
-    <div class="summary">${report.top_posts[0] ? `“${esc(report.top_posts[0].text)}” — ${esc(report.top_posts[0].handle)}, ❤️ ${report.top_posts[0].likes}` : "–"}</div>`;
+    <div class="summary">${report.top_posts[0] ? `“${esc(report.top_posts[0].text)}” — ${esc(report.top_posts[0].handle)}, ❤️ ${report.top_posts[0].likes}` : "–"}</div>
+    ${report.ai_analysis ? `<h3>🧠 AI analyst</h3><div class="summary ai-analysis">${esc(report.ai_analysis)}</div>` : ""}`;
 }
 
 /* ---------- hover tooltips ---------- */
@@ -190,6 +191,15 @@ function setupTooltips() {
     mapTip.classList.remove("hidden");
   });
   map.addEventListener("mouseleave", () => mapTip.classList.add("hidden"));
+  map.style.cursor = "pointer";
+  map.addEventListener("click", (e) => {
+    if (!mapLayout || !agents.length) return;
+    const rect = map.getBoundingClientRect();
+    const x = ((e.clientX - rect.left) * map.width) / rect.width;
+    const y = ((e.clientY - rect.top) * map.height) / rect.height;
+    const idx = Math.floor(y / mapLayout.cell) * mapLayout.cols + Math.floor(x / mapLayout.cell);
+    if (agents[idx]) openChat(agents[idx]);
+  });
 }
 setupTooltips();
 
