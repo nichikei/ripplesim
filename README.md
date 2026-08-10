@@ -51,6 +51,9 @@ with a deliberately small, readable core — no simulation framework, no chart l
   believes what it believes, or what changed its mind
 - **ReportAgent** — a tool-using analyst that *investigates* the finished simulation
   (see below) and writes the final report itself
+- **Any language** — describe the seed event in Vietnamese and the agents debate in
+  Vietnamese, the interview answers in Vietnamese, and the report comes back in
+  Vietnamese, headings included. No configuration; the topic sets the language
 
 ## 🚀 Quickstart
 
