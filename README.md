@@ -53,14 +53,15 @@ uvicorn backend.app:app --port 8123
 # open http://localhost:8123
 ```
 
-The simulation runs fully offline. To enable the LLM layer, set your key **before**
-starting the server, then turn on the **AI posts** toggle in the UI:
+The simulation runs fully offline. To enable the LLM layer, copy `.env.example` to
+`.env` (git-ignored) and put your key in it, then restart the server and turn on the
+**AI posts** toggle in the UI:
 
 ```bash
-export ANTHROPIC_API_KEY=sk-ant-...        # PowerShell: $env:ANTHROPIC_API_KEY="sk-ant-..."
-export RIPPLESIM_MODEL=claude-opus-5       # optional
-uvicorn backend.app:app --port 8123
+cp .env.example .env    # then edit .env and paste your key
 ```
+
+An `ANTHROPIC_API_KEY` already exported in the environment works too and takes priority.
 
 Cost control: only the ~10 posts that actually appear in the feed each round are written
 by the LLM (concurrently) — the other ~300 interactions stay numeric.

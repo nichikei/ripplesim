@@ -15,6 +15,7 @@ from __future__ import annotations
 
 import os
 from concurrent.futures import ThreadPoolExecutor
+from pathlib import Path
 from typing import Optional
 
 from backend.engine.personas import Persona
@@ -22,6 +23,24 @@ from backend.engine.simulation import Simulation
 
 DEFAULT_MODEL = "claude-opus-5"
 MAX_LLM_POSTS_PER_ROUND = 10
+
+ENV_FILE = Path(__file__).resolve().parent.parent / ".env"
+
+
+def load_env_file() -> None:
+    """Load KEY=value pairs from a local .env (git-ignored) if present.
+
+    Real environment variables always win, so this is a convenience for local
+    development, not an override.
+    """
+    if not ENV_FILE.is_file():
+        return
+    for line in ENV_FILE.read_text(encoding="utf-8").splitlines():
+        line = line.strip()
+        if not line or line.startswith("#") or "=" not in line:
+            continue
+        key, _, value = line.partition("=")
+        os.environ.setdefault(key.strip(), value.strip().strip('"').strip("'"))
 
 STANCE_DESC = {
     "strong_support": "strongly supports it and is genuinely excited",
@@ -44,6 +63,7 @@ class LlmService:
 
     @classmethod
     def create(cls) -> Optional["LlmService"]:
+        load_env_file()
         if not os.environ.get("ANTHROPIC_API_KEY"):
             return None
         try:
