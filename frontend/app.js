@@ -8,6 +8,7 @@ const state = {
   running: false,
   totalRounds: 12,
   agents: [],
+  report: null,
 };
 
 /* ---- slider labels ---- */
@@ -137,8 +138,11 @@ async function runSimulation() {
       onStep(step);
       await sleep(650);
     }
-    setStatus("done", "Finished");
+    // The report agent investigates the simulation before writing — this can
+    // take a few seconds, so keep the user informed rather than looking stalled.
+    setStatus("running", "Writing report…");
     await onFinished();
+    setStatus("done", "Finished");
   } catch (err) {
     setStatus("idle", "Error");
     $("composer-note").textContent = `Something went wrong: ${err.message}`;
@@ -166,6 +170,26 @@ async function injectEvent() {
   ]);
   onInject(res);
 }
+
+/* ---- full report modal ---- */
+const reportModal = () => $("report-modal");
+
+$("open-report").addEventListener("click", () => reportModal().classList.remove("hidden"));
+for (const el of document.querySelectorAll("[data-close-report]")) {
+  el.addEventListener("click", () => reportModal().classList.add("hidden"));
+}
+document.addEventListener("keydown", (e) => {
+  if (e.key === "Escape") {
+    reportModal().classList.add("hidden");
+    $("chat-drawer").classList.add("hidden");
+  }
+});
+
+$("download-report").addEventListener("click", () => {
+  if (state.simId) window.location.href = `/api/simulations/${state.simId}/report.md`;
+});
+
+$("print-report").addEventListener("click", () => window.print());
 
 /* ---- agent interview chat ---- */
 const chat = { agentId: null, history: [] };

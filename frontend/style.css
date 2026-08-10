@@ -478,6 +478,114 @@ canvas { width: 100%; height: auto; display: block; }
   padding: 10px 12px;
 }
 
+.report-open-btn { width: 100%; margin-top: 14px; }
+
+.btn-ghost {
+  background: transparent;
+  color: var(--ink-2);
+  border: 1px solid var(--border);
+  padding: 7px 12px;
+  font-size: 12.5px;
+}
+.btn-ghost:hover:not(:disabled) { background: var(--inset); color: var(--ink); }
+
+/* =================== report modal =================== */
+
+.modal { position: fixed; inset: 0; z-index: 60; display: flex; }
+.modal-backdrop {
+  position: absolute;
+  inset: 0;
+  background: rgba(41, 38, 31, 0.42);
+  backdrop-filter: blur(3px);
+}
+.modal-panel {
+  position: relative;
+  margin: auto;
+  width: min(820px, calc(100vw - 32px));
+  max-height: calc(100vh - 60px);
+  display: flex;
+  flex-direction: column;
+  background: var(--surface);
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-lg);
+  box-shadow: 0 24px 60px rgba(60, 50, 30, 0.28);
+  overflow: hidden;
+  animation: drawer-in 0.22s ease;
+}
+.modal-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 14px 18px;
+  border-bottom: 1px solid var(--grid);
+  background: var(--inset);
+}
+.modal-head b { font-size: 14px; }
+.modal-head span {
+  display: block;
+  font-size: 11.5px;
+  color: var(--muted);
+  font-style: italic;
+}
+.modal-actions { display: flex; align-items: center; gap: 8px; }
+
+/* ---------- markdown typography ---------- */
+
+.markdown {
+  overflow-y: auto;
+  padding: 28px 40px 40px;
+  color: var(--ink-2);
+  font-size: 14.5px;
+  line-height: 1.7;
+}
+.markdown h2, .markdown h3, .markdown h4 {
+  font-family: var(--serif);
+  color: var(--ink);
+  letter-spacing: -0.01em;
+  line-height: 1.25;
+}
+.markdown h2 { font-size: 25px; margin: 0 0 6px; }
+.markdown h3 {
+  font-size: 17px;
+  margin: 28px 0 8px;
+  padding-top: 14px;
+  border-top: 1px solid var(--grid);
+}
+.markdown h3:first-of-type { border-top: none; padding-top: 0; }
+.markdown h4 { font-size: 14.5px; margin: 18px 0 6px; }
+.markdown p { margin: 0 0 12px; }
+.markdown ul, .markdown ol { margin: 0 0 14px; padding-left: 22px; }
+.markdown li { margin-bottom: 5px; }
+.markdown strong { color: var(--ink); font-weight: 650; }
+.markdown code {
+  background: var(--inset);
+  border: 1px solid var(--grid);
+  border-radius: 5px;
+  padding: 1px 5px;
+  font-size: 12.5px;
+}
+.markdown table {
+  width: 100%;
+  border-collapse: collapse;
+  margin: 6px 0 18px;
+  font-size: 13px;
+}
+.markdown th, .markdown td {
+  text-align: left;
+  padding: 8px 10px;
+  border-bottom: 1px solid var(--grid);
+}
+.markdown th {
+  color: var(--muted);
+  font-size: 10.5px;
+  font-weight: 650;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+}
+.markdown td { font-variant-numeric: tabular-nums; }
+.markdown tbody tr:hover { background: var(--inset); }
+
 /* =================== interview drawer =================== */
 
 .chat-drawer {
@@ -599,6 +707,28 @@ footer {
   border-top: 1px solid var(--border);
   color: var(--muted);
   font-size: 12px;
+}
+
+/* =================== print (PDF export) =================== */
+
+@media print {
+  .topbar, .hero, main, footer, .chat-drawer, .modal-backdrop,
+  .modal-actions, #report-card { display: none !important; }
+
+  body { background: #fff; }
+  .modal { position: static; display: block; }
+  .modal-panel {
+    width: 100%;
+    max-height: none;
+    border: none;
+    box-shadow: none;
+    border-radius: 0;
+    animation: none;
+  }
+  .modal-head { background: none; border-bottom: 1px solid #ddd; padding: 0 0 10px; }
+  .markdown { padding: 20px 0; overflow: visible; font-size: 11.5pt; }
+  .markdown h3 { break-after: avoid; }
+  .markdown table, .markdown li { break-inside: avoid; }
 }
 
 /* =================== responsive =================== */

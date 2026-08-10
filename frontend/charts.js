@@ -130,8 +130,77 @@ function drawAgentGrid() {
 }
 
 /* ---------- report ---------- */
+
+/* Minimal Markdown renderer — headings, tables, lists, bold/italic/code.
+   Everything is escaped first, so agent-written text can never inject HTML. */
+function renderMarkdown(md) {
+  const inline = (s) =>
+    esc(s)
+      .replace(/\*\*([^*]+)\*\*/g, "<strong>$1</strong>")
+      .replace(/\*([^*]+)\*/g, "<em>$1</em>")
+      .replace(/`([^`]+)`/g, "<code>$1</code>");
+
+  const out = [];
+  const lines = md.split("\n");
+  let list = null;
+
+  const closeList = () => {
+    if (list) { out.push(`</${list}>`); list = null; }
+  };
+
+  for (let i = 0; i < lines.length; i++) {
+    const line = lines[i];
+
+    // table: header row followed by a separator row of dashes
+    if (line.includes("|") && /^\s*\|?[\s:-]+\|[\s|:-]*$/.test(lines[i + 1] || "")) {
+      closeList();
+      const cells = (row) =>
+        row.replace(/^\s*\|/, "").replace(/\|\s*$/, "").split("|").map((c) => c.trim());
+      const head = cells(line);
+      const rows = [];
+      i += 2;
+      while (i < lines.length && lines[i].includes("|")) rows.push(cells(lines[i++]));
+      i--;
+      out.push(
+        `<table><thead><tr>${head.map((h) => `<th>${inline(h)}</th>`).join("")}</tr></thead>` +
+        `<tbody>${rows.map((r) => `<tr>${r.map((c) => `<td>${inline(c)}</td>`).join("")}</tr>`).join("")}</tbody></table>`
+      );
+      continue;
+    }
+
+    const heading = line.match(/^(#{1,4})\s+(.*)$/);
+    if (heading) {
+      closeList();
+      const level = Math.min(heading[1].length + 1, 5); // h1 -> h2, keep page hierarchy
+      out.push(`<h${level}>${inline(heading[2])}</h${level}>`);
+      continue;
+    }
+
+    const bullet = line.match(/^\s*[-*]\s+(.*)$/);
+    if (bullet) {
+      if (list !== "ul") { closeList(); out.push("<ul>"); list = "ul"; }
+      out.push(`<li>${inline(bullet[1])}</li>`);
+      continue;
+    }
+
+    const numbered = line.match(/^\s*\d+\.\s+(.*)$/);
+    if (numbered) {
+      if (list !== "ol") { closeList(); out.push("<ol>"); list = "ol"; }
+      out.push(`<li>${inline(numbered[1])}</li>`);
+      continue;
+    }
+
+    if (!line.trim()) { closeList(); continue; }
+    closeList();
+    out.push(`<p>${inline(line)}</p>`);
+  }
+  closeList();
+  return out.join("");
+}
+
 async function renderReport() {
   const report = await api(`/simulations/${state.simId}/report`);
+  state.report = report;
   document.getElementById("report-card").classList.remove("hidden");
   const el = document.getElementById("report");
   el.innerHTML = `
@@ -145,8 +214,12 @@ async function renderReport() {
       )
       .join("")}
     <h3>Most viral post</h3>
-    <div class="summary">${report.top_posts[0] ? `“${esc(report.top_posts[0].text)}” — ${esc(report.top_posts[0].handle)}, ❤️ ${report.top_posts[0].likes}` : "–"}</div>
-    ${report.ai_analysis ? `<h3>🧠 AI analyst</h3><div class="summary ai-analysis">${esc(report.ai_analysis)}</div>` : ""}`;
+    <div class="summary">${report.top_posts[0] ? `“${esc(report.top_posts[0].text)}” — ${esc(report.top_posts[0].handle)}, ❤️ ${report.top_posts[0].likes}` : "–"}</div>`;
+
+  document.getElementById("report-body").innerHTML = renderMarkdown(report.markdown || "");
+  document.getElementById("report-byline").textContent = report.written_by_agent
+    ? "written by the AI report agent"
+    : "generated from simulation data";
 }
 
 /* ---------- hover tooltips ---------- */

@@ -124,6 +124,7 @@
       <div class="card hidden" id="report-card">
         <h2>Prediction report</h2>
         <div id="report"></div>
+        <button id="open-report" class="btn btn-dark report-open-btn">📄 Read full report</button>
       </div>
     </aside>
   </main>
@@ -132,6 +133,24 @@
     <span>RippleSim — a multi-agent social opinion simulation engine.</span>
     <span>FastAPI · vanilla JS · hand-rolled canvas charts</span>
   </footer>
+
+  <div id="report-modal" class="modal hidden" role="dialog" aria-label="Full report">
+    <div class="modal-backdrop" data-close-report></div>
+    <article class="modal-panel">
+      <header class="modal-head">
+        <div>
+          <b>Simulation report</b>
+          <span id="report-byline"></span>
+        </div>
+        <div class="modal-actions">
+          <button id="download-report" class="btn btn-ghost">⬇ Markdown</button>
+          <button id="print-report" class="btn btn-ghost">🖨 Print / PDF</button>
+          <button class="chat-close" data-close-report aria-label="Close">✕</button>
+        </div>
+      </header>
+      <div id="report-body" class="markdown"></div>
+    </article>
+  </div>
 
   <div id="chat-drawer" class="chat-drawer hidden" role="dialog" aria-label="Interview agent">
     <div class="chat-head">
