@@ -14,22 +14,36 @@ with a deliberately small, readable core — no simulation framework, no chart l
 
 ## ✨ Features
 
+**Simulation core (always on, no API key needed)**
+
 - **Persona generator** — 8 archetypes (journalist, skeptic, enthusiast, troll, ...) with
   per-agent opinion, conviction, sociability and expressiveness
 - **Scale-free social network** — Barabási–Albert preferential attachment, implemented
   by hand (~40 lines), so a few hub "influencers" emerge naturally
 - **Opinion dynamics** — bounded-confidence model with a backfire effect: content too far
   from an agent's views pushes it *away*; broadcast news uses a separate shock model
+- **Real debates** — agents reply to posts they love or hate, criticised authors answer
+  back, and agents whose stance flips publicly announce the change of heart
+- **Agent memory** — each agent remembers the last posts it read, which becomes the
+  context its next post is written from
 - **Viral spread** — emotional posts travel 2 hops instead of 1; likes/shares feed an
   engagement-based influencer ranking
 - **God mode** — inject a breaking-news event mid-run with chosen impact and reach
 - **Prediction report** — verdict (FAVORABLE / HOSTILE / DIVIDED / CONTESTED), trend,
   stance distribution, top influencers, most viral post
-- **Live dashboard** — real-time feed, hand-rolled canvas charts (opinion trajectory,
-  stance distribution, population map), zero front-end dependencies
-- **Optional LLM mode** — agents write unique posts via the Anthropic API; falls back to
-  stance-based templates offline
-- **Reproducible** — pass a `seed` for deterministic runs; 11 unit tests on the engine
+- **Live dashboard** — real-time feed, hand-rolled canvas charts with hover tooltips
+  (opinion trajectory, stance distribution, population map), zero front-end dependencies
+- **Reproducible** — pass a `seed` for deterministic runs; 13 unit tests on the engine
+
+**LLM layer (with an Anthropic API key)**
+
+- **In-character posts** — Claude writes each displayed post as that persona, using its
+  archetype, current stance, and what it recently read
+- **Argued replies** — replies quote the parent post and argue against it, rather than
+  reacting with canned attitude
+- **Interview any agent** — click an agent in the feed or population map and ask why it
+  believes what it believes, or what changed its mind
+- **AI analyst** — Claude reads the simulation results and writes the closing analysis
 
 ## 🚀 Quickstart
 
@@ -39,12 +53,17 @@ uvicorn backend.app:app --port 8123
 # open http://localhost:8123
 ```
 
-Optional LLM-generated posts:
+The simulation runs fully offline. To enable the LLM layer, set your key **before**
+starting the server, then turn on the **AI posts** toggle in the UI:
 
 ```bash
-export ANTHROPIC_API_KEY=sk-ant-...
-# then tick "use_llm" via the API (POST /api/simulations {"use_llm": true, ...})
+export ANTHROPIC_API_KEY=sk-ant-...        # PowerShell: $env:ANTHROPIC_API_KEY="sk-ant-..."
+export RIPPLESIM_MODEL=claude-opus-5       # optional
+uvicorn backend.app:app --port 8123
 ```
+
+Cost control: only the ~10 posts that actually appear in the feed each round are written
+by the LLM (concurrently) — the other ~300 interactions stay numeric.
 
 Run tests:
 
@@ -58,16 +77,20 @@ python -m pytest tests/ -q
 frontend/  (vanilla JS + hand-rolled canvas charts)
    │  fetch /api/*
    ▼
-backend/app.py          FastAPI — simulation lifecycle endpoints
-backend/llm.py          optional Anthropic-powered post writer
-backend/engine/
-   personas.py          archetype-based population generator
+backend/app.py          FastAPI — simulation lifecycle, agent chat
+backend/llm.py          LlmService — in-character posts, interviews, analysis
+backend/engine/         (pure simulation, no LLM dependency)
+   personas.py          archetype-based population generator + agent memory
    network.py           Barabási–Albert scale-free graph
    opinion.py           bounded confidence + backfire + news shock
-   content.py           stance-based post templates, virality scoring
-   simulation.py        round loop, viral spread, event injection
+   content.py           stance-based post/reply/rebuttal templates, virality
+   simulation.py        round loop, debates, viral spread, event injection
    report.py            verdict, trend, influencer ranking
 ```
+
+**Why the split?** The engine is deterministic and free; the LLM only rewrites the text
+of posts the user actually sees. That keeps runs reproducible, cheap, and fully
+functional offline — while the LLM layer supplies the language and the interviews.
 
 **Simulation round:** agents wake up by sociability → each writes a post → virality
 decides reach (1–2 hops) → readers update opinions via bounded confidence → likes and
@@ -81,7 +104,8 @@ shares accrue to the author → population metrics recorded.
 | GET  | `/api/simulations/{id}` | Current state, metrics history, agents |
 | POST | `/api/simulations/{id}/step` | Advance one round; returns that round's posts |
 | POST | `/api/simulations/{id}/inject` | Inject a breaking-news event (`headline`, `impact`, `reach`) |
-| GET  | `/api/simulations/{id}/report` | Final prediction report |
+| GET  | `/api/simulations/{id}/report` | Final prediction report (+ `ai_analysis` in LLM mode) |
+| POST | `/api/simulations/{id}/agents/{agent_id}/chat` | Interview an agent (`message`, `history`) |
 
 ## 🔬 Model notes
 
@@ -97,6 +121,6 @@ shares accrue to the author → population metrics recorded.
 ## 🗺 Roadmap
 
 - [ ] Network visualization (force-directed graph)
-- [ ] Chat with an individual agent about why it changed its mind
 - [ ] Multiple competing topics in one society
 - [ ] Export report as PDF
+- [ ] Persist simulations (currently in-memory)

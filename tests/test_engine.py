@@ -109,6 +109,33 @@ def test_simulation_is_reproducible():
     assert a.metrics_history == b.metrics_history
 
 
+def test_agents_remember_what_they_read():
+    sim = Simulation(topic="memory test", n_agents=80, seed=11)
+    for _ in range(4):
+        sim.step()
+    with_memory = [p for p in sim.population if p.memory]
+    assert with_memory, "agents should accumulate memory of posts they read"
+    assert all(len(p.memory) <= Persona.MEMORY_SIZE for p in sim.population)
+
+
+def test_debate_produces_replies_and_rebuttals():
+    sim = Simulation(topic="debate test", n_agents=120, seed=7)
+    for _ in range(8):
+        sim.step()
+
+    replies = [p for p in sim.posts if p.reply_to]
+    assert replies, "agents should reply to each other"
+    # replies carry the context an LLM needs to argue against the parent post
+    assert all(p.parent_text and p.agrees is not None for p in replies)
+
+    rebuttals = [p for p in sim.posts if p.is_rebuttal]
+    assert rebuttals, "criticised authors should answer back"
+    for reb in rebuttals:
+        # a rebuttal targets someone who actually replied to that author
+        assert reb.agrees is False
+        assert reb.reply_to != sim.population[reb.author_id].handle
+
+
 def test_event_injection_shifts_opinion():
     sim = Simulation(topic="event test", n_agents=150, seed=5)
     before = sim.metrics_history[-1]["mean_opinion"]
