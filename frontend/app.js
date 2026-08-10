@@ -45,14 +45,17 @@ function renderMetrics(metrics, round) {
 
 function renderPosts(posts) {
   const feed = $("feed");
-  for (const post of posts.slice(0, 8)) {
+  for (const post of posts.slice(0, 10)) {
     const div = document.createElement("div");
-    div.className = `post ${post.stance}`;
+    div.className = `post ${post.stance}${post.reply_to ? " reply" : ""}`;
+    const replyTag = post.reply_to
+      ? `<span class="post-reply-tag">↩ ${esc(post.reply_to)}</span>` : "";
     div.innerHTML = `
       <div class="post-head">
         <span>${post.avatar}</span>
         <span class="post-name">${esc(post.author)}</span>
         <span class="post-handle">${esc(post.handle)} · ${esc(post.archetype)}</span>
+        ${replyTag}
         <span class="post-round">R${post.round}</span>
       </div>
       <div class="post-text">${esc(post.text)}</div>
@@ -84,12 +87,17 @@ async function runSimulation() {
   state.totalRounds = Number($("rounds").value);
 
   try {
+    const wantLlm = $("use-llm").checked;
     const sim = await api("/simulations", "POST", {
       topic: $("topic").value.trim(),
       n_agents: Number($("n-agents").value),
       bias: Number($("bias").value),
+      use_llm: wantLlm,
     });
     state.simId = sim.id;
+    if (wantLlm && !sim.llm_active) {
+      $("feed-status").textContent = "— LLM unavailable, using templates";
+    }
     renderMetrics(sim.metrics, 0);
     onSimCreated(sim);
 

@@ -29,6 +29,11 @@
         <label for="rounds">Rounds: <span id="rounds-value">12</span></label>
         <input id="rounds" type="range" min="3" max="40" step="1" value="12" />
 
+        <label class="checkbox-row">
+          <input type="checkbox" id="use-llm" />
+          🧠 AI-written posts <span class="hint">(needs ANTHROPIC_API_KEY on the server)</span>
+        </label>
+
         <button id="run-btn">▶ Run simulation</button>
       </section>
 

@@ -60,6 +60,18 @@ input[type="text"] {
 }
 input[type="range"] { width: 100%; accent-color: var(--accent); }
 
+.checkbox-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  color: var(--ink-2);
+  margin-top: 12px;
+  cursor: pointer;
+}
+.checkbox-row input { accent-color: var(--accent); }
+.checkbox-row .hint { color: var(--muted); font-size: 10.5px; }
+
 button {
   width: 100%;
   margin-top: 12px;
@@ -108,6 +120,9 @@ button:disabled { background: var(--grid); color: var(--muted); cursor: not-allo
 .post.support, .post.strong_support { border-left-color: var(--support); }
 .post.oppose, .post.strong_oppose { border-left-color: var(--oppose); }
 .post.event { border-left-color: var(--accent-2); background: #241a12; }
+
+.post.reply { margin-left: 22px; border-style: dashed; }
+.post-reply-tag { color: var(--accent); font-size: 11px; }
 
 .post-head { display: flex; gap: 8px; align-items: baseline; font-size: 12px; margin-bottom: 4px; }
 .post-name { font-weight: 600; }
