@@ -193,9 +193,25 @@ def chat_with_agent(sim_id: str, agent_id: int, req: ChatRequest) -> dict:
 
 # --- static frontend -------------------------------------------------------
 
+class NoCacheStaticFiles(StaticFiles):
+    """Serve the frontend with revalidation forced.
+
+    Without this the browser keeps serving a cached app.js after a deploy, so
+    users silently run old code against a new API.
+    """
+
+    def file_response(self, *args, **kwargs):  # type: ignore[override]
+        response = super().file_response(*args, **kwargs)
+        response.headers["Cache-Control"] = "no-cache, must-revalidate"
+        return response
+
+
 if FRONTEND_DIR.is_dir():
     @app.get("/", include_in_schema=False)
     def index() -> FileResponse:
-        return FileResponse(FRONTEND_DIR / "index.html")
+        return FileResponse(
+            FRONTEND_DIR / "index.html",
+            headers={"Cache-Control": "no-cache, must-revalidate"},
+        )
 
-    app.mount("/", StaticFiles(directory=FRONTEND_DIR), name="frontend")
+    app.mount("/", NoCacheStaticFiles(directory=FRONTEND_DIR), name="frontend")
