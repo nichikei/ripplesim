@@ -22,8 +22,10 @@ from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
 
+from backend.engine import content
 from backend.engine.report import build_report
 from backend.engine.simulation import Simulation
+from backend.llm import make_llm_writer
 
 app = FastAPI(title="RippleSim", version="0.1.0")
 
@@ -37,6 +39,8 @@ class CreateSimRequest(BaseModel):
     bias: float = Field(default=0.0, ge=-1.0, le=1.0,
                         description="How favourable the seed event is (-1..1)")
     seed: int | None = Field(default=None, description="RNG seed for reproducible runs")
+    use_llm: bool = Field(default=False,
+                          description="Generate post text with an LLM (needs ANTHROPIC_API_KEY)")
 
 
 class InjectEventRequest(BaseModel):
@@ -54,6 +58,14 @@ def _get_sim(sim_id: str) -> Simulation:
 
 @app.post("/api/simulations")
 def create_simulation(req: CreateSimRequest) -> dict:
+    llm_active = False
+    if req.use_llm:
+        writer = make_llm_writer()
+        content.set_llm_writer(writer)
+        llm_active = writer is not None
+    else:
+        content.set_llm_writer(None)
+
     sim_id = uuid.uuid4().hex[:8]
     SIMULATIONS[sim_id] = Simulation(
         topic=req.topic, n_agents=req.n_agents, seed=req.seed, bias=req.bias
@@ -63,6 +75,7 @@ def create_simulation(req: CreateSimRequest) -> dict:
         "id": sim_id,
         "topic": sim.topic,
         "n_agents": sim.n_agents,
+        "llm_active": llm_active,
         "metrics": sim.metrics_history[-1],
         "agents": sim.agents_summary(),
     }
