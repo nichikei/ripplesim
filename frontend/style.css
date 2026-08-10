@@ -1,0 +1,121 @@
+/* RippleSim dashboard — dark theme */
+
+:root {
+  --page: #0d0d0d;
+  --surface: #1a1a19;
+  --ink: #ffffff;
+  --ink-2: #c3c2b7;
+  --muted: #898781;
+  --grid: #2c2c2a;
+  --border: rgba(255, 255, 255, 0.10);
+  --accent: #3987e5;       /* series-1 blue */
+  --accent-2: #d95926;     /* series-2 orange */
+  --support: #3987e5;      /* diverging cool pole */
+  --oppose: #e66767;       /* diverging warm pole */
+  --neutral: #898781;
+}
+
+* { box-sizing: border-box; margin: 0; padding: 0; }
+
+body {
+  background: var(--page);
+  color: var(--ink);
+  font-family: system-ui, -apple-system, "Segoe UI", sans-serif;
+  min-height: 100vh;
+}
+
+header {
+  padding: 20px 28px 12px;
+  border-bottom: 1px solid var(--border);
+}
+header h1 { font-size: 22px; }
+header p { color: var(--ink-2); font-size: 13px; margin-top: 2px; }
+
+main {
+  display: grid;
+  grid-template-columns: 300px 1fr;
+  gap: 16px;
+  padding: 16px 28px 28px;
+  align-items: start;
+}
+
+.card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 14px;
+  margin-bottom: 14px;
+}
+.card h2 { font-size: 13px; text-transform: uppercase; letter-spacing: 0.05em; color: var(--ink-2); margin-bottom: 10px; }
+
+label { display: block; font-size: 12px; color: var(--muted); margin: 10px 0 4px; }
+input[type="text"] {
+  width: 100%;
+  background: var(--page);
+  border: 1px solid var(--grid);
+  border-radius: 6px;
+  color: var(--ink);
+  padding: 8px 10px;
+  font-size: 13px;
+}
+input[type="range"] { width: 100%; accent-color: var(--accent); }
+
+button {
+  width: 100%;
+  margin-top: 12px;
+  background: var(--accent);
+  color: #fff;
+  border: none;
+  border-radius: 6px;
+  padding: 9px 0;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+}
+button:hover:not(:disabled) { filter: brightness(1.1); }
+button:disabled { background: var(--grid); color: var(--muted); cursor: not-allowed; }
+#inject-btn { background: var(--accent-2); }
+
+.tiles { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+.tile {
+  background: var(--page);
+  border: 1px solid var(--grid);
+  border-radius: 8px;
+  padding: 8px 10px;
+  display: flex;
+  flex-direction: column;
+}
+.tile-label { font-size: 10px; color: var(--muted); text-transform: uppercase; letter-spacing: 0.04em; }
+.tile-value { font-size: 20px; font-weight: 650; margin-top: 2px; }
+
+/* ------- feed ------- */
+
+.feed-column h2 { font-size: 13px; text-transform: uppercase; letter-spacing: 0.05em; color: var(--ink-2); margin-bottom: 10px; }
+#feed-status { color: var(--muted); text-transform: none; letter-spacing: 0; font-weight: 400; }
+
+#feed { display: flex; flex-direction: column; gap: 8px; max-height: 78vh; overflow-y: auto; padding-right: 4px; }
+
+.post {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-left: 3px solid var(--neutral);
+  border-radius: 8px;
+  padding: 10px 12px;
+  animation: pop 0.25s ease;
+}
+@keyframes pop { from { opacity: 0; transform: translateY(-4px); } }
+
+.post.support, .post.strong_support { border-left-color: var(--support); }
+.post.oppose, .post.strong_oppose { border-left-color: var(--oppose); }
+.post.event { border-left-color: var(--accent-2); background: #241a12; }
+
+.post-head { display: flex; gap: 8px; align-items: baseline; font-size: 12px; margin-bottom: 4px; }
+.post-name { font-weight: 600; }
+.post-handle, .post-round { color: var(--muted); }
+.post-round { margin-left: auto; }
+.post-text { font-size: 13px; color: var(--ink-2); line-height: 1.45; }
+.post-meta { font-size: 11px; color: var(--muted); margin-top: 6px; }
+
+@media (max-width: 900px) {
+  main { grid-template-columns: 1fr; }
+}

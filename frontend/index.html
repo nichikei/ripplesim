@@ -1,0 +1,64 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>RippleSim — social opinion simulator</title>
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+  <header>
+    <h1>🌊 RippleSim</h1>
+    <p>Drop a piece of news into a virtual society — watch opinion ripple.</p>
+  </header>
+
+  <main>
+    <aside class="sidebar">
+      <section class="card" id="setup-card">
+        <h2>Seed event</h2>
+        <label for="topic">Topic / headline</label>
+        <input id="topic" type="text" maxlength="200"
+               value="City announces free public transport for students" />
+
+        <label for="n-agents">Agents: <span id="n-agents-value">120</span></label>
+        <input id="n-agents" type="range" min="20" max="500" step="10" value="120" />
+
+        <label for="bias">Event favourability: <span id="bias-value">0.0</span></label>
+        <input id="bias" type="range" min="-1" max="1" step="0.1" value="0" />
+
+        <label for="rounds">Rounds: <span id="rounds-value">12</span></label>
+        <input id="rounds" type="range" min="3" max="40" step="1" value="12" />
+
+        <button id="run-btn">▶ Run simulation</button>
+      </section>
+
+      <section class="card" id="event-card">
+        <h2>God mode — inject event</h2>
+        <label for="event-headline">Breaking news</label>
+        <input id="event-headline" type="text" maxlength="200"
+               placeholder="Mayor admits budget shortfall…" />
+        <label for="event-impact">Impact: <span id="event-impact-value">-0.5</span></label>
+        <input id="event-impact" type="range" min="-1" max="1" step="0.1" value="-0.5" />
+        <button id="inject-btn" disabled>⚡ Inject</button>
+      </section>
+
+      <section class="card" id="stats-card">
+        <h2>Live metrics</h2>
+        <div class="tiles">
+          <div class="tile"><span class="tile-label">Round</span><span class="tile-value" id="stat-round">–</span></div>
+          <div class="tile"><span class="tile-label">Mean stance</span><span class="tile-value" id="stat-mean">–</span></div>
+          <div class="tile"><span class="tile-label">Support</span><span class="tile-value" id="stat-support">–</span></div>
+          <div class="tile"><span class="tile-label">Oppose</span><span class="tile-value" id="stat-oppose">–</span></div>
+        </div>
+      </section>
+    </aside>
+
+    <section class="feed-column">
+      <h2>Live feed <span id="feed-status"></span></h2>
+      <div id="feed"></div>
+    </section>
+  </main>
+
+  <script src="app.js"></script>
+</body>
+</html>
