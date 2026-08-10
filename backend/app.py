@@ -62,6 +62,20 @@ class InjectEventRequest(BaseModel):
     reach: float = Field(default=0.6, ge=0.05, le=1.0)
 
 
+@app.get("/api/capabilities")
+def capabilities() -> dict:
+    """What this server can do, so the UI can configure itself on load."""
+    llm = get_llm()
+    return {
+        "llm_available": llm is not None,
+        "models": {
+            "posts": llm.post_model if llm else None,
+            "chat": llm.chat_model if llm else None,
+            "report": llm.report_model if llm else None,
+        },
+    }
+
+
 def _get_sim(sim_id: str) -> Simulation:
     sim = SIMULATIONS.get(sim_id)
     if sim is None:
@@ -108,9 +122,14 @@ def get_simulation(sim_id: str) -> dict:
 def step_simulation(sim_id: str) -> dict:
     sim = _get_sim(sim_id)
     posts = sim.step()
+    llm_written: int | None = None
     if sim_id in LLM_SIMS and (llm := get_llm()):
-        posts = llm.rewrite_posts(sim, posts)
+        posts, llm_written = llm.rewrite_posts(sim, posts)
     return {
+        # How many posts the LLM actually wrote this round. 0 while in LLM
+        # mode means every call failed — the UI says so instead of silently
+        # showing templates.
+        "llm_written": llm_written,
         "round": sim.round,
         "posts": posts,
         "metrics": sim.metrics_history[-1],

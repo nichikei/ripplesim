@@ -13,6 +13,7 @@ Design for cost and latency:
 
 from __future__ import annotations
 
+import logging
 import os
 from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
@@ -32,6 +33,8 @@ REPORT_MODEL = "claude-sonnet-5"
 MODELS_WITHOUT_EFFORT = ("claude-haiku-4-5", "claude-sonnet-4-5")
 
 MAX_LLM_POSTS_PER_ROUND = 10
+
+logger = logging.getLogger(__name__)
 
 
 def supports_effort(model: str) -> bool:
@@ -105,10 +108,15 @@ class LlmService:
                 **kwargs,
             )
             if response.stop_reason == "refusal":
+                logger.warning("%s refused the request", model)
                 return None
             text = next((b.text for b in response.content if b.type == "text"), "")
             return text.strip() or None
-        except Exception:
+        except Exception as exc:
+            # Never break the simulation over an API problem — but never hide
+            # it either: a revoked key used to look exactly like template mode.
+            logger.warning("LLM call to %s failed: %s: %s",
+                           model, type(exc).__name__, exc)
             return None
 
     @staticmethod
@@ -151,15 +159,18 @@ class LlmService:
             "topic. Make it feel personal and specific. Post text only."
         )
 
-    def rewrite_posts(self, sim: Simulation, posts: list[dict]) -> list[dict]:
+    def rewrite_posts(self, sim: Simulation, posts: list[dict]) -> tuple[list[dict], int]:
         """Replace template text with in-character LLM text, concurrently.
 
         ``posts`` are the dicts returned by ``Simulation.step()``; only the
         first MAX_LLM_POSTS_PER_ROUND non-event posts are rewritten.
+
+        Returns the posts and how many were actually rewritten, so the caller
+        can tell a working LLM from one that is failing every call.
         """
         targets = [p for p in posts if not p.get("is_event")][:MAX_LLM_POSTS_PER_ROUND]
 
-        def job(post: dict) -> None:
+        def job(post: dict) -> bool:
             persona = sim.population[post["author_id"]]
             text = self._complete(
                 self.post_model,
@@ -168,7 +179,7 @@ class LlmService:
                 max_tokens=500,
             )
             if not text:
-                return
+                return False
             text = text[:280]
             post["text"] = text
             # Write back to the simulation's own record too, so the report
@@ -178,9 +189,12 @@ class LlmService:
             if stored is not None:
                 stored.text = text
                 stored.llm_written = True
+            return True
 
-        list(self.pool.map(job, targets))
-        return posts
+        written = sum(self.pool.map(job, targets))
+        if targets and not written:
+            logger.error("Every LLM rewrite failed this round — falling back to templates")
+        return posts, written
 
     # ------------------------------------------------------------- chat
 
@@ -215,10 +229,13 @@ class LlmService:
                 messages=messages,
             )
             if response.stop_reason == "refusal":
+                logger.warning("%s refused the interview request", self.chat_model)
                 return None
             text = next((b.text for b in response.content if b.type == "text"), "")
             return text.strip() or None
-        except Exception:
+        except Exception as exc:
+            logger.warning("Interview call to %s failed: %s: %s",
+                           self.chat_model, type(exc).__name__, exc)
             return None
 
     # ------------------------------------------------------------ report

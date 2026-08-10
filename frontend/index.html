@@ -45,10 +45,11 @@
           <input id="rounds" type="range" min="3" max="40" step="1" value="12" />
         </div>
 
-        <label class="switch" title="Agents write their own posts with an LLM (needs ANTHROPIC_API_KEY on the server)">
+        <label class="switch" id="use-llm-switch"
+               title="Agents write their own posts with an LLM (needs ANTHROPIC_API_KEY on the server)">
           <input type="checkbox" id="use-llm" />
           <span class="switch-track"><span class="switch-thumb"></span></span>
-          <span class="switch-label">AI posts</span>
+          <span class="switch-label" id="use-llm-label">AI posts</span>
         </label>
 
         <button id="run-btn" class="btn btn-primary">
@@ -66,6 +67,7 @@
     <section class="feed-column">
       <div class="feed-toolbar">
         <span class="section-title">Live feed</span>
+        <span id="mode-badge" class="mode-badge hidden"></span>
         <div class="inject-group">
           <input id="event-headline" type="text" maxlength="200"
                  placeholder="Inject breaking news mid-run…" />

@@ -169,7 +169,19 @@ body {
 
 /* toggle switch */
 .switch { display: flex; align-items: center; gap: 8px; cursor: pointer; user-select: none; }
-.switch input { display: none; }
+/* Visually hidden, not display:none — the checkbox must stay focusable and
+   present in the accessibility tree. */
+.switch input {
+  position: absolute;
+  width: 1px; height: 1px;
+  opacity: 0;
+  margin: 0;
+}
+.switch input:focus-visible + .switch-track {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+.switch:has(input:disabled) { cursor: not-allowed; opacity: 0.55; }
 .switch-track {
   width: 34px; height: 20px;
   background: var(--grid);
@@ -268,6 +280,18 @@ main {
   z-index: 10;
   background: linear-gradient(var(--page) 75%, transparent);
 }
+
+.mode-badge {
+  font-size: 11px;
+  font-weight: 650;
+  padding: 3px 10px;
+  border-radius: 999px;
+  border: 1px solid var(--border);
+  white-space: nowrap;
+}
+.mode-ai { color: var(--accent-hover); background: var(--accent-soft); border-color: rgba(217, 119, 87, 0.35); }
+.mode-template { color: var(--muted); background: var(--inset); }
+.mode-failing { color: #a33; background: rgba(227, 73, 72, 0.12); border-color: rgba(227, 73, 72, 0.35); }
 
 .inject-group {
   display: flex;

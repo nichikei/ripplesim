@@ -20,6 +20,30 @@ for (const [slider, label] of [
   $(slider).addEventListener("input", () => ($(label).textContent = $(slider).value));
 }
 
+/* ---- capabilities: configure the UI for what the server can actually do ---- */
+(async () => {
+  try {
+    const caps = await api("/capabilities");
+    const toggle = $("use-llm");
+    if (caps.llm_available) {
+      // The server has a key — use it by default. Nobody wants canned
+      // template posts when real ones are one flag away.
+      toggle.checked = true;
+      $("use-llm-switch").title =
+        `Agents write their own posts (${caps.models.posts}); ` +
+        `interviews and the report use ${caps.models.report}.`;
+    } else {
+      toggle.checked = false;
+      toggle.disabled = true;
+      $("use-llm-label").textContent = "AI posts (no API key)";
+      $("use-llm-switch").title =
+        "Set ANTHROPIC_API_KEY on the server to let agents write their own posts.";
+    }
+  } catch {
+    /* server not reachable yet — leave the toggle as authored */
+  }
+})();
+
 /* ---- status helpers ---- */
 function setStatus(mode, text) {
   const pill = $("status-pill");
@@ -29,6 +53,19 @@ function setStatus(mode, text) {
 
 function setProgress(round, total) {
   $("progress-bar").style.width = total ? `${(100 * round) / total}%` : "0%";
+}
+
+const MODES = {
+  ai: ["🧠 AI-written", "mode-ai"],
+  template: ["📋 Template mode", "mode-template"],
+  failing: ["⚠️ LLM failing — templates", "mode-failing"],
+};
+
+function setModeBadge(mode) {
+  const [text, cls] = MODES[mode];
+  const badge = $("mode-badge");
+  badge.textContent = text;
+  badge.className = `mode-badge ${cls}`;
 }
 
 /* ---- API helpers ---- */
@@ -107,6 +144,7 @@ async function runSimulation() {
   $("inject-btn").disabled = false;
   $("feed").innerHTML = "";
   $("composer-note").textContent = "";
+  $("mode-badge").classList.remove("hidden");
   state.totalRounds = Number($("rounds").value);
   setProgress(0, state.totalRounds);
   setStatus("running", "Starting…");
@@ -122,12 +160,15 @@ async function runSimulation() {
     state.simId = sim.id;
     state.agents = sim.agents;
     state.llmActive = sim.llm_active;
+
+    setModeBadge(sim.llm_active ? "ai" : "template");
+
     $("composer-note").textContent =
       wantLlm && !sim.llm_active
         ? "LLM unavailable on the server — falling back to template posts."
         : sim.llm_active
         ? "AI mode: agents write their own posts, so each round takes a few seconds."
-        : "";
+        : "Template mode: posts come from canned phrases. Turn on AI posts for real writing.";
     renderMetrics(sim.metrics, 0);
     onSimCreated(sim);
 
@@ -136,6 +177,14 @@ async function runSimulation() {
       setProgress(round, state.totalRounds);
       const step = await api(`/simulations/${state.simId}/step`, "POST");
       state.agents = step.agents;
+      if (state.llmActive && step.llm_written === 0) {
+        // Asked for AI posts and got none — say so rather than quietly
+        // serving templates that look like a broken simulation.
+        setModeBadge("failing");
+        $("composer-note").textContent =
+          "Every AI call failed this round — check the server logs (an invalid or " +
+          "expired ANTHROPIC_API_KEY is the usual cause). Showing template posts.";
+      }
       renderPosts(step.posts);
       renderMetrics(step.metrics, step.round);
       onStep(step);
