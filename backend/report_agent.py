@@ -57,6 +57,20 @@ def _fmt(x: float) -> str:
     return f"{x:+.2f}"
 
 
+def strip_preamble(text: str) -> str:
+    """Drop any narration the agent writes before the report itself.
+
+    The final turn often opens with something like "Now I have enough to write
+    the report." — fine as thinking-out-loud, wrong in a deliverable. The
+    report proper starts at its first heading.
+    """
+    lines = text.splitlines()
+    for i, line in enumerate(lines):
+        if line.lstrip().startswith("#"):
+            return "\n".join(lines[i:]).strip()
+    return text.strip()
+
+
 # --------------------------------------------------------------- fallback
 
 def render_markdown(report: dict, analysis: Optional[str] = None) -> str:
@@ -269,7 +283,9 @@ class ReportAgent:
                     break
             if last is None or last.stop_reason == "refusal":
                 return None
-            text = "\n".join(b.text for b in last.content if b.type == "text").strip()
+            text = strip_preamble(
+                "\n".join(b.text for b in last.content if b.type == "text")
+            )
             return text or None
         except Exception:
             return None

@@ -1,6 +1,6 @@
 from backend.engine.report import build_report, debate_stats, faction_breakdown, key_moments
 from backend.engine.simulation import Simulation
-from backend.report_agent import render_markdown
+from backend.report_agent import render_markdown, strip_preamble
 
 
 def finished_sim(rounds: int = 8, with_event: bool = False) -> Simulation:
@@ -42,6 +42,18 @@ def test_markdown_report_is_complete():
         assert section in md
     assert "| Group | Size |" in md          # faction table renders
     assert md.endswith("\n")
+
+
+def test_agent_narration_is_stripped_from_the_deliverable():
+    raw = "Now I have enough to write the report.\n\n## Executive summary\n\nOpinion hardened."
+    assert strip_preamble(raw).startswith("## Executive summary")
+
+
+def test_strip_preamble_leaves_a_clean_report_untouched():
+    clean = "## Executive summary\n\nOpinion hardened."
+    assert strip_preamble(clean) == clean
+    # and a report with no headings at all is still returned, not dropped
+    assert strip_preamble("  just prose  ") == "just prose"
 
 
 def test_markdown_report_includes_agent_analysis_when_present():
