@@ -1,5 +1,7 @@
 """The LLM layer must degrade safely and must not send parameters a model rejects."""
 
+import unicodedata
+
 import backend.llm as llm
 
 
@@ -18,6 +20,18 @@ def test_default_models_are_the_cheap_split():
     # The post model is the one we call ~10x per round, so it must be a model
     # we deliberately keep cheap.
     assert not llm.supports_effort(llm.POST_MODEL)
+
+
+def test_decomposed_vietnamese_is_composed():
+    """Model output can arrive decomposed; 'tắt' must not render as 'tă´t'."""
+    decomposed = "Tóm tắt"          # Tóm tắt, fully decomposed
+    assert llm.normalize_text(decomposed) == "Tóm tắt"
+    assert len(llm.normalize_text(decomposed)) < len(decomposed)
+
+
+def test_normalizing_leaves_composed_text_alone():
+    assert llm.normalize_text("Tóm tắt") == "Tóm tắt"
+    assert llm.normalize_text("plain ascii") == "plain ascii"
 
 
 def test_service_is_absent_without_a_key(monkeypatch, tmp_path):

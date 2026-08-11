@@ -15,6 +15,7 @@ from __future__ import annotations
 
 import logging
 import os
+import unicodedata
 from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 from typing import Optional
@@ -39,6 +40,16 @@ logger = logging.getLogger(__name__)
 
 def supports_effort(model: str) -> bool:
     return not model.startswith(MODELS_WITHOUT_EFFORT)
+
+
+def normalize_text(text: str) -> str:
+    """Compose Unicode to NFC.
+
+    Model output can arrive decomposed, which renders as a base letter with a
+    detached accent — Vietnamese 'tắt' showing up as 'tă´t'. Composing it once
+    on the way in fixes every surface that displays the text.
+    """
+    return unicodedata.normalize("NFC", text)
 
 ENV_FILE = Path(__file__).resolve().parent.parent / ".env"
 
@@ -80,6 +91,7 @@ class LlmService:
         # One worker per post so a round is a single wave of calls, not two —
         # round latency is one API call, not ceil(posts / workers) of them.
         self.pool = ThreadPoolExecutor(max_workers=MAX_LLM_POSTS_PER_ROUND)
+        self._language_cache: dict[str, str] = {}
 
     @classmethod
     def create(cls) -> Optional["LlmService"]:
@@ -111,7 +123,7 @@ class LlmService:
                 logger.warning("%s refused the request", model)
                 return None
             text = next((b.text for b in response.content if b.type == "text"), "")
-            return text.strip() or None
+            return normalize_text(text.strip()) or None
         except Exception as exc:
             # Never break the simulation over an API problem — but never hide
             # it either: a revoked key used to look exactly like template mode.
@@ -131,8 +143,8 @@ class LlmService:
             f"Posts you recently read:\n{memory}\n"
             "Stay fully in character. Write casual social-media prose in your "
             "own voice; never mention being an AI or a simulation.\n"
-            "Write in the same language the topic is written in — if the topic "
-            "is in Vietnamese, post in Vietnamese, and so on."
+            "Write your post in the same language the topic is written in, "
+            "whatever that language is. Do not switch to another one."
         )
 
     # ------------------------------------------------------- post writing
@@ -194,6 +206,16 @@ class LlmService:
         written = sum(self.pool.map(job, targets))
         if targets and not written:
             logger.error("Every LLM rewrite failed this round — falling back to templates")
+
+        # The dicts were serialised before the rewrite, so a reply still quotes
+        # the template its parent used to have. Re-resolve those quotes now
+        # that the parents say what the feed will actually show.
+        for post in posts:
+            if post.get("reply_to"):
+                parent = sim.post_by_id(post["parent_id"]) if post.get("parent_id") is not None else None
+                if parent is not None:
+                    post["parent_text"] = parent.text
+
         return posts, written
 
     # ------------------------------------------------------------- chat
@@ -232,11 +254,35 @@ class LlmService:
                 logger.warning("%s refused the interview request", self.chat_model)
                 return None
             text = next((b.text for b in response.content if b.type == "text"), "")
-            return text.strip() or None
+            return normalize_text(text.strip()) or None
         except Exception as exc:
             logger.warning("Interview call to %s failed: %s: %s",
                            self.chat_model, type(exc).__name__, exc)
             return None
+
+    # ---------------------------------------------------------- language
+
+    def detect_language(self, topic: str) -> str:
+        """Name the language a topic is written in, e.g. "English".
+
+        Asking the report agent to infer this itself proved unreliable — it
+        would answer an English topic in German or Vietnamese. Naming the
+        language explicitly in its prompt removes the guesswork, and one
+        Haiku call per report is negligible.
+        """
+        if topic in self._language_cache:
+            return self._language_cache[topic]
+        answer = self._complete(
+            self.post_model,
+            "Reply with the English name of the language the user's text is "
+            "written in. One word, nothing else. Example replies: English, "
+            "Vietnamese, German.",
+            topic,
+            max_tokens=100,
+        )
+        language = (answer or "English").strip().splitlines()[0][:30] or "English"
+        self._language_cache[topic] = language
+        return language
 
     # ------------------------------------------------------------ report
 
@@ -244,4 +290,6 @@ class LlmService:
         """Run the tool-using ReportAgent over a finished simulation."""
         from backend.report_agent import ReportAgent
 
-        return ReportAgent(self.client, self.report_model).write(sim, report)
+        language = self.detect_language(report["topic"])
+        logger.info("Writing the report in %s", language)
+        return ReportAgent(self.client, self.report_model).write(sim, report, language)

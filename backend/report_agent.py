@@ -23,11 +23,11 @@ SYSTEM = """You are a senior public-opinion analyst. You have just been handed \
 the results of a multi-agent social simulation and a set of tools to \
 investigate it.
 
-LANGUAGE: write the entire report — every section heading included — in the \
-same language as the topic. A Vietnamese topic means a Vietnamese report with \
-Vietnamese headings. The section names below are descriptions of what each \
+LANGUAGE: the required output language is stated in the user's message. Write \
+the entire report in that language — every section heading included — and do \
+not switch to any other. The section names below are descriptions of what each \
 section must contain; you write the actual heading text yourself, in the \
-topic's language.
+required language.
 
 Investigate before you write: look at the factions, read posts from the agents \
 who drove the conversation, and inspect the rounds where opinion moved most. \
@@ -248,9 +248,11 @@ class ReportAgent:
 
     # ------------------------------------------------------------- run
 
-    def write(self, sim: Simulation, report: dict) -> Optional[str]:
+    def write(self, sim: Simulation, report: dict,
+              language: str = "English") -> Optional[str]:
         """Investigate the simulation and return the report as Markdown."""
         brief = (
+            f"WRITE THE ENTIRE REPORT IN {language.upper()}.\n\n"
             f"Topic: {report['topic']}\n"
             f"Rounds: {report['rounds']} · posts: {report['total_posts']}\n"
             f"Verdict: {report['verdict']} (trend: {report['trend']})\n"
@@ -266,7 +268,7 @@ class ReportAgent:
             + "; ".join(
                 f"round {m['round']} shift {_fmt(m['shift'])}" for m in report["key_moments"]
             )
-            + "\n\nInvestigate with the tools, then write the report."
+            + f"\n\nInvestigate with the tools, then write the report in {language}."
         )
 
         from backend.llm import supports_effort
@@ -291,8 +293,10 @@ class ReportAgent:
                     break
             if last is None or last.stop_reason == "refusal":
                 return None
+            from backend.llm import normalize_text
+
             text = strip_preamble(
-                "\n".join(b.text for b in last.content if b.type == "text")
+                normalize_text("\n".join(b.text for b in last.content if b.type == "text"))
             )
             return text or None
         except Exception:
