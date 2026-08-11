@@ -16,6 +16,28 @@ prediction report: verdict, opinion trajectory, top influencers, most viral post
 Inspired by large multi-agent prediction engines like MiroFish, but built from scratch
 with a deliberately small, readable core — no simulation framework, no chart library.
 
+![The RippleSim dashboard: a live feed of agent posts beside the opinion trajectory, stance distribution and population map](docs/02-dashboard.png)
+
+<sub>Agents argue in real time on the left while the charts track where opinion is heading.
+Every post above was written in character by an LLM; the numbers underneath are pure
+simulation. These screenshots come from a live run via `scripts/screenshots.py`.</sub>
+
+<table>
+<tr>
+<td width="50%"><b>The report writes itself</b><br><br>
+A tool-using agent investigates the finished run — reading posts, inspecting rounds,
+comparing factions — then writes the analysis with real handles and quotes as evidence.
+Export it as Markdown or print to PDF.</td>
+<td width="50%"><b>Interview any agent</b><br><br>
+Click a post or a tile in the population map and ask an agent why it believes what it
+believes, or what changed its mind. It answers in character, from what it actually read.</td>
+</tr>
+<tr>
+<td><img src="docs/03-report.png" alt="The generated report, with an executive summary and an analysis of what drove the shift"></td>
+<td><img src="docs/04-interview.png" alt="Interviewing a simulated agent about why it opposes the policy"></td>
+</tr>
+</table>
+
 ## ✨ Features
 
 **Simulation core (always on, no API key needed)**
@@ -38,8 +60,8 @@ with a deliberately small, readable core — no simulation framework, no chart l
 - **Export** — read the full report in-app, download it as Markdown, or print to PDF
 - **Live dashboard** — real-time feed, hand-rolled canvas charts with hover tooltips
   (opinion trajectory, stance distribution, population map), zero front-end dependencies
-- **Reproducible** — pass a `seed` for deterministic runs; 25 unit tests on the engine,
-  the report, and the LLM configuration
+- **Reproducible** — pass a `seed` for deterministic runs; 39 tests across the engine,
+  the report, the API and the LLM configuration
 
 **LLM layer (with an Anthropic API key)**
 
@@ -98,6 +120,13 @@ Run tests:
 
 ```bash
 python -m pytest tests/ -q
+```
+
+Regenerate the README screenshots against a running server (needs
+`pip install playwright && playwright install chromium`):
+
+```bash
+python scripts/screenshots.py
 ```
 
 ## 🏗 Architecture
