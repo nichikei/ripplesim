@@ -8,14 +8,19 @@ POST /api/simulations/{id}/step    advance one round, returns that round's posts
 POST /api/simulations/{id}/inject  inject a breaking-news event
 GET  /api/simulations/{id}/report  final prediction report
 
-Simulations live in memory keyed by a short id — fine for a demo tool,
-swap for Redis/DB if it ever needs to scale.
+Sessions live in memory keyed by a short id — fine for a demo tool, swap for
+Redis/DB if it ever needs to scale. The store is capped and evicts
+least-recently-used sessions so a long-running server cannot grow forever.
 """
 
 from __future__ import annotations
 
+import re
 import uuid
+from collections import OrderedDict
+from dataclasses import dataclass
 from pathlib import Path
+from urllib.parse import quote
 
 from fastapi import FastAPI, HTTPException
 from fastapi.responses import FileResponse, PlainTextResponse
@@ -29,9 +34,40 @@ from backend.report_agent import render_markdown
 
 app = FastAPI(title="RippleSim", version="0.2.0")
 
-SIMULATIONS: dict[str, Simulation] = {}
-LLM_SIMS: set[str] = set()  # simulations running with LLM-written posts
 FRONTEND_DIR = Path(__file__).resolve().parent.parent / "frontend"
+
+MAX_SESSIONS = 50
+
+
+@dataclass
+class Session:
+    """Everything one simulation owns, so eviction is a single operation.
+
+    Keeping the simulation, its LLM flag and its cached report together makes
+    it impossible to drop one and leak the others.
+    """
+
+    sim: Simulation
+    llm: bool = False
+    report_markdown: str | None = None
+
+
+# Ordered by least-recently-used first.
+SESSIONS: OrderedDict[str, Session] = OrderedDict()
+
+
+def _touch(sim_id: str) -> Session:
+    """Fetch a session and mark it as most recently used."""
+    session = SESSIONS.get(sim_id)
+    if session is None:
+        raise HTTPException(status_code=404, detail="simulation not found")
+    SESSIONS.move_to_end(sim_id)
+    return session
+
+
+def _evict_oldest() -> None:
+    while len(SESSIONS) > MAX_SESSIONS:
+        SESSIONS.popitem(last=False)
 
 _llm: LlmService | None = None
 _llm_checked = False
@@ -76,24 +112,16 @@ def capabilities() -> dict:
     }
 
 
-def _get_sim(sim_id: str) -> Simulation:
-    sim = SIMULATIONS.get(sim_id)
-    if sim is None:
-        raise HTTPException(status_code=404, detail="simulation not found")
-    return sim
-
-
 @app.post("/api/simulations")
 def create_simulation(req: CreateSimRequest) -> dict:
     llm_active = bool(req.use_llm and get_llm())
 
     sim_id = uuid.uuid4().hex[:8]
-    SIMULATIONS[sim_id] = Simulation(
+    sim = Simulation(
         topic=req.topic, n_agents=req.n_agents, seed=req.seed, bias=req.bias
     )
-    if llm_active:
-        LLM_SIMS.add(sim_id)
-    sim = SIMULATIONS[sim_id]
+    SESSIONS[sim_id] = Session(sim=sim, llm=llm_active)
+    _evict_oldest()
     return {
         "id": sim_id,
         "topic": sim.topic,
@@ -106,7 +134,7 @@ def create_simulation(req: CreateSimRequest) -> dict:
 
 @app.get("/api/simulations/{sim_id}")
 def get_simulation(sim_id: str) -> dict:
-    sim = _get_sim(sim_id)
+    sim = _touch(sim_id).sim
     return {
         "id": sim_id,
         "topic": sim.topic,
@@ -120,10 +148,11 @@ def get_simulation(sim_id: str) -> dict:
 
 @app.post("/api/simulations/{sim_id}/step")
 def step_simulation(sim_id: str) -> dict:
-    sim = _get_sim(sim_id)
+    session = _touch(sim_id)
+    sim = session.sim
     posts = sim.step()
     llm_written: int | None = None
-    if sim_id in LLM_SIMS and (llm := get_llm()):
+    if session.llm and (llm := get_llm()):
         posts, llm_written = llm.rewrite_posts(sim, posts)
     return {
         # How many posts the LLM actually wrote this round. 0 while in LLM
@@ -139,28 +168,29 @@ def step_simulation(sim_id: str) -> dict:
 
 @app.post("/api/simulations/{sim_id}/inject")
 def inject_event(sim_id: str, req: InjectEventRequest) -> dict:
-    sim = _get_sim(sim_id)
+    sim = _touch(sim_id).sim
     record = sim.inject_event(req.headline, req.impact, req.reach)
     return {"event": record, "metrics": sim.metrics_history[-1], "agents": sim.agents_summary()}
 
 
-REPORT_CACHE: dict[str, str] = {}  # sim_id -> markdown (agent runs are expensive)
-
-
 def _report_markdown(sim_id: str) -> tuple[dict, str, bool]:
-    """Build the report and its Markdown rendering. Returns (report, md, by_agent)."""
-    sim = _get_sim(sim_id)
-    report = build_report(sim)
-    if sim_id in REPORT_CACHE:
-        return report, REPORT_CACHE[sim_id], True
+    """Build the report and its Markdown rendering. Returns (report, md, by_agent).
+
+    An agent run is slow and costs money, so its output is cached on the
+    session and reused for the download endpoint.
+    """
+    session = _touch(sim_id)
+    report = build_report(session.sim)
+    if session.report_markdown is not None:
+        return report, session.report_markdown, True
 
     written = None
-    if sim_id in LLM_SIMS and (llm := get_llm()):
-        written = llm.write_report(sim, report)
-    markdown = written or render_markdown(report)
+    if session.llm and (llm := get_llm()):
+        written = llm.write_report(session.sim, report)
     if written:
-        REPORT_CACHE[sim_id] = markdown
-    return report, markdown, bool(written)
+        session.report_markdown = written
+        return report, written, True
+    return report, render_markdown(report), False
 
 
 @app.get("/api/simulations/{sim_id}/report")
@@ -171,15 +201,28 @@ def get_report(sim_id: str) -> dict:
     return report
 
 
+def content_disposition(topic: str, fallback: str) -> str:
+    """Build a Content-Disposition header that survives non-ASCII topics.
+
+    HTTP headers are latin-1, but `str.isalnum()` is true for 'ộ' — so a
+    Vietnamese topic used to crash the download with a UnicodeEncodeError.
+    RFC 5987 solves it properly: an ASCII filename for old clients plus a
+    UTF-8 one that keeps the original characters.
+    """
+    ascii_slug = re.sub(r"-+", "-", re.sub(r"[^A-Za-z0-9]", "-", topic)).strip("-")[:60]
+    utf8_name = quote(f"ripplesim-{topic[:60]}.md", safe="")
+    return (f'attachment; filename="ripplesim-{ascii_slug or fallback}.md"; '
+            f"filename*=UTF-8''{utf8_name}")
+
+
 @app.get("/api/simulations/{sim_id}/report.md", response_class=PlainTextResponse)
 def download_report(sim_id: str) -> PlainTextResponse:
     """Download the report as a Markdown file."""
     _, markdown, _ = _report_markdown(sim_id)
-    slug = "".join(c if c.isalnum() else "-" for c in _get_sim(sim_id).topic).strip("-")[:60]
     return PlainTextResponse(
         markdown,
         media_type="text/markdown; charset=utf-8",
-        headers={"Content-Disposition": f'attachment; filename="ripplesim-{slug or sim_id}.md"'},
+        headers={"Content-Disposition": content_disposition(SESSIONS[sim_id].sim.topic, sim_id)},
     )
 
 
@@ -191,7 +234,7 @@ class ChatRequest(BaseModel):
 @app.post("/api/simulations/{sim_id}/agents/{agent_id}/chat")
 def chat_with_agent(sim_id: str, agent_id: int, req: ChatRequest) -> dict:
     """Interview a simulated agent (requires the LLM to be available)."""
-    sim = _get_sim(sim_id)
+    sim = _touch(sim_id).sim
     if not 0 <= agent_id < len(sim.population):
         raise HTTPException(status_code=404, detail="agent not found")
     llm = get_llm()
