@@ -35,12 +35,12 @@ class Post:
     is_event: bool = False
     is_conversion: bool = False  # agent announcing it switched sides
     reply_to: str | None = None  # handle of the post being replied to
-    parent_text: str | None = None  # text of the post being replied to
+    parent_id: int | None = None  # id of the post being replied to
     agrees: bool | None = None  # for replies: agreeing or pushing back?
     is_rebuttal: bool = False  # author answering back to a critical reply
     llm_written: bool = False  # text was rewritten in-character by the LLM
 
-    def to_dict(self, author: Persona) -> dict:
+    def to_dict(self, author: Persona, parent: "Post | None" = None) -> dict:
         return {
             "id": self.id,
             "round": self.round,
@@ -56,7 +56,11 @@ class Post:
             "is_event": self.is_event,
             "is_conversion": self.is_conversion,
             "reply_to": self.reply_to,
-            "parent_text": self.parent_text,
+            "parent_id": self.parent_id,
+            # Resolved at render time, not stored: the parent's text can be
+            # rewritten by the LLM after this reply was created, and a quote
+            # of a post that no longer says that is worse than no quote.
+            "parent_text": parent.text if parent else None,
             "agrees": self.agrees,
             "is_rebuttal": self.is_rebuttal,
         }
@@ -82,6 +86,7 @@ class Simulation:
         self.graph = network.build_scale_free_graph(self.n_agents, m=3, rng=self.rng)
         # Last side (support/oppose) each agent publicly held — for conversion posts.
         self._announced_side = {p.id: self._side(p) for p in self.population}
+        self._post_counter = 0
         # Round 0 snapshot = initial state, before anyone speaks.
         self.metrics_history.append(self._record_metrics())
 
@@ -97,7 +102,7 @@ class Simulation:
         for author in active:
             text = content.write_post(author, self.topic, self.rng)
             post = Post(
-                id=len(self.posts) + len(new_posts),
+                id=self._next_id(),
                 round=self.round,
                 author_id=author.id,
                 text=text,
@@ -105,6 +110,7 @@ class Simulation:
                 virality=content.virality_score(author, self.rng),
             )
             author.posts_made += 1
+            new_posts.append(post)
 
             hops = 2 if post.virality > 0.75 else 1
             audience = network.neighbors_within(self.graph, author.id, hops)
@@ -125,14 +131,14 @@ class Simulation:
                 wants_to_reply = self.rng.random() < 0.1 * reader.expressiveness * (0.5 + post.virality)
                 if replies_left > 0 and (agree or strongly_disagrees) and wants_to_reply:
                     reply = Post(
-                        id=len(self.posts) + len(new_posts) + 1,
+                        id=self._next_id(),
                         round=self.round,
                         author_id=reader.id,
                         text=content.write_reply(self.topic, author.handle, agree, self.rng),
                         opinion=reader.opinion,
                         virality=post.virality * 0.5,
                         reply_to=author.handle,
-                        parent_text=post.text,
+                        parent_id=post.id,
                         agrees=agree,
                     )
                     reader.posts_made += 1
@@ -143,21 +149,20 @@ class Simulation:
                     if not agree and self.rng.random() < 0.5 + 0.4 * author.expressiveness:
                         pending_rebuttals.append((author, reply))
             author.engagement += post.likes + post.shares * 3
-            new_posts.append(post)
 
         # The debate continues: authors who took criticism fire back once.
         for author, reply in pending_rebuttals[:3]:
             replier = self.population[reply.author_id]
             author.remember(reply.text)
             new_posts.append(Post(
-                id=0,
+                id=self._next_id(),
                 round=self.round,
                 author_id=author.id,
                 text=content.write_rebuttal(self.topic, replier.handle, self.rng),
                 opinion=author.opinion,
                 virality=0.5,
                 reply_to=replier.handle,
-                parent_text=reply.text,
+                parent_id=reply.id,
                 agrees=False,
                 is_rebuttal=True,
             ))
@@ -171,7 +176,7 @@ class Simulation:
             last = self._announced_side[agent.id]
             if now != 0 and last != 0 and now != last and self.rng.random() < 0.6:
                 new_posts.append(Post(
-                    id=0,
+                    id=self._next_id(),
                     round=self.round,
                     author_id=agent.id,
                     text=content.write_conversion(self.topic, now > 0, self.rng),
@@ -183,9 +188,6 @@ class Simulation:
             if now != 0:
                 self._announced_side[agent.id] = now
 
-        # Renumber: replies were created before their round-mates were appended.
-        for offset, p in enumerate(new_posts):
-            p.id = len(self.posts) + offset
         self.posts.extend(new_posts)
         self.metrics_history.append(self._record_metrics())
 
@@ -199,7 +201,7 @@ class Simulation:
         ordinary = [p for p in new_posts if not p.is_conversion and p.reply_to is None]
         ordinary.sort(key=lambda p: p.likes + p.shares * 3, reverse=True)
         shown = conversions[:2] + replies[:4] + ordinary
-        return [p.to_dict(self.population[p.author_id]) for p in shown]
+        return [self.serialize(p) for p in shown]
 
     # ----------------------------------------------------------- god mode
 
@@ -218,7 +220,7 @@ class Simulation:
                 touched += 1
 
         event_post = Post(
-            id=len(self.posts),
+            id=self._next_id(),
             round=self.round,
             author_id=0,
             text=f"🗞️ BREAKING: {headline}",
@@ -232,6 +234,22 @@ class Simulation:
         return record
 
     # ------------------------------------------------------------- helpers
+
+    def _next_id(self) -> int:
+        """Hand out a stable post id.
+
+        Ids are assigned once at creation and never reshuffled, so a reply can
+        safely hold its parent's id — an earlier version renumbered posts after
+        the fact and would have left those references dangling.
+        """
+        post_id = self._post_counter
+        self._post_counter += 1
+        return post_id
+
+    def serialize(self, post: Post) -> dict:
+        """Render a post for the API, resolving its parent's current text."""
+        parent = self.post_by_id(post.parent_id) if post.parent_id is not None else None
+        return post.to_dict(self.population[post.author_id], parent)
 
     def post_by_id(self, post_id: int) -> Post | None:
         """Look up a stored post. Ids are assigned as the index in ``posts``."""

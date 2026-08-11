@@ -136,5 +136,5 @@ def build_report(sim: Simulation) -> dict:
             }
             for p in influencers
         ],
-        "top_posts": [p.to_dict(sim.population[p.author_id]) for p in top_posts],
+        "top_posts": [sim.serialize(p) for p in top_posts],
     }

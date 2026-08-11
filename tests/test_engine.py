@@ -125,8 +125,35 @@ def test_debate_produces_replies_and_rebuttals():
 
     replies = [p for p in sim.posts if p.reply_to]
     assert replies, "agents should reply to each other"
-    # replies carry the context an LLM needs to argue against the parent post
-    assert all(p.parent_text and p.agrees is not None for p in replies)
+    # A reply must be able to resolve the post it answers, so the quote it
+    # shows always matches what that post currently says.
+    for reply in replies:
+        assert reply.agrees is not None
+        parent = sim.post_by_id(reply.parent_id)
+        assert parent is not None, "a reply must point at a real post"
+        assert sim.serialize(reply)["parent_text"] == parent.text
+
+
+def test_post_ids_are_unique_and_stable():
+    sim = Simulation(topic="ids", n_agents=60, seed=21)
+    for _ in range(4):
+        sim.step()
+    sim.inject_event("Breaking", impact=-0.4)
+    sim.step()
+    ids = [p.id for p in sim.posts]
+    assert len(ids) == len(set(ids)), "post ids must be unique"
+
+
+def test_a_rewritten_post_updates_the_quote_shown_in_its_replies():
+    """The LLM rewrites text after the round; stale quotes used to survive."""
+    sim = Simulation(topic="quotes", n_agents=80, seed=5)
+    for _ in range(4):
+        sim.step()
+    reply = next(p for p in sim.posts if p.parent_id is not None)
+    parent = sim.post_by_id(reply.parent_id)
+
+    parent.text = "a completely different, LLM-written sentence"
+    assert sim.serialize(reply)["parent_text"] == parent.text
 
     rebuttals = [p for p in sim.posts if p.is_rebuttal]
     assert rebuttals, "criticised authors should answer back"
